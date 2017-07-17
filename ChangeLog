@@ -1,66 +1,8 @@
 
-2017-07-13  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* configure.ac [_BSD_SOURCE]: set COB_HAS_UTC_OFFSET to "yes" if C compiler
-	  defines _BSD_SOURCE as we can access the offset directly in this case
-	* configure.ac: output detailed version information for BDB, if available
-
-2017-06-16  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* configure.ac: added --enable-code-coverage and test for code-coverage
-	  tools if enabled by AX_CODE_COVERAGE,
-	  always check if user specified optimization options in CFLAGS,
-	  not only when --enable-debug is active,
-	  compile with -O0 for both --enable-debug and --enable-code-coverage
-	* Makefile.am: added CODE_COVERAGE parts as provided by AX_CODE_COVERAGE
-	  which provides new target `make check-code-coverage`
-
-2017-06-15  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* Makefile.am: added .PHONY to correctly declare logical targets that
-	  always have to be executed and don't result in a file,
-	  define prerequisites to fix parallel builds
-
-2017-05-11  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* configure.ac: change in library check for BDB - prefer library
-	  with version number from db.h included (-ldb-6.1 over -ldb) to
-	  prevent errors on system with multiple versions that linked
-	  against wrong version, see bug #100
-
-2017-04-28  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* configure.ac: removed AM_MAINTAINER_MODE, added AM_PROG_LEX,
-	  AC_PROG_YACC, AM_MISSING_PROG([HELP2MAN], [help2man])
-	* create_win_dist.sh: integrated hack for _MSC_VER from
-	  cobc/Makefile.am; use a clean temporary folder for building
-
-2017-04-18  Ron Norman <rjn@inglenet.com>
-
-	* configure.ac: check for 'isfinite' (HAVE_ISFINITE)
-	  'isfinite' is in the C99 standard and 'finite' deprecated with some
-	  compilers
-
-2017-02-24  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* HACKING: added info how to prepare a distribution
-	* Makefile.am: don't touch any generated files, see HACKING
-	* Makefile.am: chmod for all files to 644,
-	  executable scripts and directories get 755
-
 2017-02-09  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
 	* HACKING, README: moved instructions for development/svn-builds
 	  from README to new file HACKING and added missing information
-
-2017-02-06  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* configure.ac: fixed use of undefined COB_TIMEZONE
-
-2017-02-04  Edward Hart <edward.dan.hart@gmail.com>
-
-	* configure.ac: fixed bug where -g3 in CFLAGS was replaced by 3,
-	  instead of being removed.
 
 2016-12-26  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
@@ -167,7 +109,7 @@
 2015-06-08  Luke Smith <cobcoder@users.sourceforge.net>
 
 	* Add WITH SIZE to extended ACCEPT and DISPLAY. (see wish list #37)
-	  Updated the info gnucobol and added Index at end.
+	  Updated the info gnucobol and added Index at end. 
 	* cobc/parser.y:
 	* cobc/reserved.c:
 	* cobc/tree.c:
@@ -211,7 +153,7 @@
 
 2014-09-09  Philipp Böhme <phi.boehme@googlemail.com>
 
-	* configure.ac : new check for mp_get_memory_functions in
+	* configure.ac : new check for mp_get_memory_functions in 
 	  libgmp and new preprocessor define HAVE_MP_GET_MEMORY_FUNCTIONS
 
 2014-08-07  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
@@ -258,7 +200,7 @@
 
 20??-??-??  Roger While <simrw@sim-basis.de>
 
-	* General : Affecting directories bin and cobc - use a
+	* General : Affecting directories bin and cobc - use a 
 	  modified version of getopt_long_long (placed in lib)
 
 2010-06-28  Roger While <simrw@sim-basis.de>
@@ -404,7 +346,7 @@
 	* All : Update Coypright info on all files
 	* README : Update - SORT does not require BDB; Fix typo
 	* cpucheck.c : Uck, Intel, in their infinite wisdom, decided
-		to assign the same family to Core 2 Duo as
+		to assign the same family to Core 2 Duo as 
 		Pentium (pro/2/3). Check the model number.
 
 2006-10-25  Roger While <simrw@sim-basis.de>
@@ -743,7 +685,7 @@
 
 	* configure.ac: Generate libcob/cobconfig.h using AM_CONFIG_HEADER.
 	Check db.h as well as db1/db.h.
-
+	
 2002-09-12  Keisuke Nishida  <knishida@netlab.jp>
 
 	* configure.ac: Add check for regex.

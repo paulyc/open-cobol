@@ -1,6 +1,6 @@
 /*
-   Copyright (C) 2003-2012, 2014-2017 Free Software Foundation, Inc.
-   Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
+   Copyright (C) 2003-2012, 2014-2016 Free Software Foundation, Inc.
+   Written by Keisuke Nishida, Roger While, Simon Sobisch
 
    This file is part of GnuCOBOL.
 
@@ -158,8 +158,8 @@ static struct call_hash		**call_table;
 static struct struct_handle	*base_preload_ptr;
 static struct struct_handle	*base_dynload_ptr;
 
-static cob_global		*cobglobptr = NULL;
-static cob_settings		*cobsetptr = NULL;
+static cob_global		*cobglobptr;
+static cob_settings		*cobsetptr;
 
 static char			**resolve_path;
 static char			*resolve_error;
@@ -175,14 +175,17 @@ static lt_dlhandle		mainhandle;
 static size_t			call_lastsize;
 static size_t			resolve_size;
 static unsigned int		cob_jmp_primed;
-static cob_field_attr	const_binll_attr =
-			{COB_TYPE_NUMERIC_BINARY, 18, 0, COB_FLAG_HAVE_SIGN, NULL};
-static cob_field_attr	const_binull_attr =
-			{COB_TYPE_NUMERIC_BINARY, 18, 0, 0, NULL};
+
+static char		module_ext[8];		/* EB */
+static int		cob_anim_logging;	/* EB */
+static int		cob_anim_tracing;	/* EB */
 
 #undef	COB_SYSTEM_GEN
-#define	COB_SYSTEM_GEN(cob_name, pmin, pmax, c_name)	\
-	{ cob_name, {(void *(*)(void *))c_name} },
+#if 0
+#define	COB_SYSTEM_GEN(x,y,z)		{ x, {(void *(*)())z} },
+#else
+#define	COB_SYSTEM_GEN(x,y,z)		{ x, {(void *(*)(void *))z} },
+#endif
 
 static const struct system_table	system_tab[] = {
 #include "system.def"
@@ -377,12 +380,7 @@ do_cancel_module (struct call_hash *p, struct call_hash **base_hash,
 	    *(p->module->module_ref_count)) {
 		nocancel = 1;
 	}
-#ifdef _MSC_VER
-#pragma warning(suppress: 4113) // funcint is a generic function prototype
 	cancel_func = p->module->module_cancel.funcint;
-#else
-	cancel_func = p->module->module_cancel.funcint;
-#endif
 	(void)cancel_func (-1, NULL, NULL, NULL, NULL);
 	p->module = NULL;
 
@@ -458,8 +456,10 @@ cache_preload (const char *path)
 {
 	struct struct_handle	*preptr;
 	lt_dlhandle		libhandle;
+
 #if defined(_WIN32) || defined(__CYGWIN__)
-	struct struct_handle	*last_elem = NULL;
+	struct struct_handle	*last_elem;
+	last_elem = NULL;
 #endif
 
 	/* Check for duplicate */
@@ -608,6 +608,14 @@ cob_resolve_internal (const char *name, const char *dirent,
 	lt_dlhandle		handle;
 	size_t			i;
 
+	FILE* anilog = NULL; /* Animator logging for debug purposes */
+	if (cob_anim_tracing) {
+		anilog = fopen("debugger-trace.log", "a");
+		fprintf(anilog, "Resolving %s ...\n", name);
+		fflush(anilog);
+	}
+
+
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
@@ -616,6 +624,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 	/* Search the cache */
 	func = lookup (name);
 	if (func) {
+		if (anilog) fclose(anilog);
 		return func;
 	}
 
@@ -666,6 +675,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 		if (func != NULL) {
 			insert (name, func, mainhandle, NULL, NULL, 1);
 			resolve_error = NULL;
+			if(cob_anim_tracing) fclose(anilog);
 			return func;
 		}
 	}
@@ -676,6 +686,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 		if (func != NULL) {
 			insert (name, func, preptr->handle,	NULL, preptr->path, 1);
 			resolve_error = NULL;
+			if(cob_anim_tracing) fclose(anilog);
 			return func;
 		}
 	}
@@ -690,6 +701,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 			insert (name, func, preptr->handle,
 				NULL, preptr->path, 1);
 			resolve_error = NULL;
+			if(cob_anim_tracing) fclose(anilog);
 			return func;
 		}
 	}
@@ -750,6 +762,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 		call_filename_buff[COB_NORMAL_MAX] = 0;
 		if (access (call_filename_buff, R_OK) != 0) {
 			set_resolve_error (_("cannot find module"), name);
+			if(cob_anim_tracing) fclose(anilog);
 			return NULL;
 		}
 		handle = lt_dlopen (call_filename_buff);
@@ -761,15 +774,24 @@ cob_resolve_internal (const char *name, const char *dirent,
 				insert (name, func, handle, NULL,
 					call_filename_buff, 0);
 				resolve_error = NULL;
+				if(cob_anim_tracing) fclose(anilog);
 				return func;
 			}
 		}
 		set_resolve_error (_("cannot find entry point"),
 				   (const char *)s);
+		if(cob_anim_tracing) fclose(anilog);
 		return NULL;
 	}
+
+
 	for (i = 0; i < resolve_size; ++i) {
 		call_filename_buff[COB_NORMAL_MAX] = 0;
+		if (cob_anim_tracing) { /* EB */
+			fprintf(anilog, "Module Extension: %s\n", module_ext); /* EB */
+			fprintf(anilog, "cob_anim: %i\n", cobsetptr->cob_anim); /* EB */
+		} /* EB */
+
 		if (resolve_path[i] == NULL) {
 			snprintf (call_filename_buff, (size_t)COB_NORMAL_MAX,
 				  "%s.%s", (char *)s, COB_MODULE_EXT);
@@ -778,6 +800,11 @@ cob_resolve_internal (const char *name, const char *dirent,
 				  "%s%c%s.%s", resolve_path[i],
 				  SLASH_CHAR, (char *)s, COB_MODULE_EXT);
 		}
+
+		if (cob_anim_tracing) {
+			fprintf(anilog, "Looping. Filename: %s\n", call_filename_buff);
+		}
+
 		call_filename_buff[COB_NORMAL_MAX] = 0;
 		if (access (call_filename_buff, R_OK) == 0) {
 			handle = lt_dlopen (call_filename_buff);
@@ -789,11 +816,23 @@ cob_resolve_internal (const char *name, const char *dirent,
 					insert (name, func, handle, NULL,
 						call_filename_buff, 0);
 					resolve_error = NULL;
+					if (cob_anim_tracing) {
+						fprintf(anilog, "Loaded module %s ...\n", call_filename_buff);
+						fflush(anilog);
+						fclose(anilog);
+					}
 					return func;
 				}
 			}
 			set_resolve_error (_("cannot find entry point"),
 					   (const char *)s);
+
+			if (cob_anim_tracing) {
+				fprintf(anilog, "Cannot find module '%s'\n", name);
+				fflush(anilog);
+				fclose(anilog);
+			}
+
 			return NULL;
 		}
 	}
@@ -963,7 +1002,7 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 	char				*buff;
 	char				*entry;
 	char				*dirent;
-	int				len;
+	int					len;
 
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
@@ -1062,7 +1101,7 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 	char				*name;
 	const char			*entry;
 	const struct cob_call_struct	*s;
-
+	
 	int	(*cancel_func)(const int, void *, void *, void *, void *);
 
 	if (unlikely(!cobglobptr)) {
@@ -1079,12 +1118,7 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 	for (s = cs; s && s->cob_cstr_name; s++) {
 		if (!strcmp (entry, s->cob_cstr_name)) {
 			if (s->cob_cstr_cancel.funcvoid) {
-#ifdef _MSC_VER
-#pragma warning(suppress: 4113) // funcint is a generic function prototype
 				cancel_func = s->cob_cstr_cancel.funcint;
-#else
-				cancel_func = s->cob_cstr_cancel.funcint;
-#endif
 				(void)cancel_func (-1, NULL, NULL, NULL,
 						   NULL);
 			}
@@ -1410,6 +1444,19 @@ cob_init_call (cob_global *lptr, cob_settings* sptr)
 	call_table = cob_malloc (sizeof (struct call_hash *) * HASH_SIZE);
 #endif
 
+	/* FIXME: add to common.h/c */
+	s = getenv("COB_ANIM_LOGGING"); /* EB */
+	if (s && (*s == 'Y' || *s == 'y' || *s == '1')) /* EB */
+		cob_anim_logging = 1; /* EB */
+	else /* EB */
+		cob_anim_logging = 0; /* EB */
+
+	s = getenv("COB_ANIM_TRACE"); /* EB */
+	if (s && (*s == 'Y' || *s == 'y' || *s == '1')) /* EB */
+		cob_anim_tracing = 1; /* EB */
+	else /* EB */
+		cob_anim_tracing = 0; /* EB */
+
 	call_filename_buff = cob_malloc ((size_t)COB_NORMAL_BUFF);
 	call_entry_buff = cob_malloc ((size_t)COB_SMALL_BUFF);
 
@@ -1442,10 +1489,6 @@ cob_init_call (cob_global *lptr, cob_settings* sptr)
 	if (cobsetptr->cob_preload_str != NULL) {
 
 		p = cob_strdup (cobsetptr->cob_preload_str);
-
-		cob_free (cobsetptr->cob_preload_str);
-		cobsetptr->cob_preload_str = NULL;
-
 		s = strtok (p, PATHSEP_STR);
 		for (; s; s = strtok (NULL, PATHSEP_STR)) {
 #ifdef __OS400__
@@ -1474,442 +1517,4 @@ cob_init_call (cob_global *lptr, cob_settings* sptr)
 	cob_free (buff);
 	call_buffer = cob_fast_malloc ((size_t)CALL_BUFF_SIZE);
 	call_lastsize = CALL_BUFF_SIZE;
-}
-
-/******************************************
- * Routines for C interface with COBOL
- */
-
-static cob_field *
-cob_get_param_field (int n, const char *caller_name)
-{
-	if (cobglobptr == NULL
-	 || COB_MODULE_PTR == NULL) {
-		cob_runtime_warning (_("%s: COBOL runtime is not initialized"), caller_name);
-		return NULL;
-	}
-	if (n < 1
-	 || n > cobglobptr->cob_call_params) {
-		cob_runtime_warning (_("%s: param %d is not within range of %d"),
-				     caller_name, n, cobglobptr->cob_call_params);
-		return NULL;
-	}
-	if (COB_MODULE_PTR->cob_procedure_params[n - 1] == NULL) {
-		cob_runtime_warning (_("%s: param %d is NULL"), caller_name, n);
-		return NULL;
-	}
-	return COB_MODULE_PTR->cob_procedure_params[n - 1];
-}
-
-int
-cob_get_num_params (void)
-{
-	if (cobglobptr) {
-		return cobglobptr->cob_call_params;
-	}
-	cob_runtime_warning (_("%s COBOL runtime is not initialized"), "cob_get_num_params");
-	return -1;
-}
-
-int
-cob_get_param_type (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_type");
-
-	if (f == NULL) {
-		return -1;
-	}
-	if (f->attr->type == COB_TYPE_NUMERIC_BINARY) {
-		if (COB_FIELD_REAL_BINARY (f)) {
-			return COB_TYPE_NUMERIC_COMP5;
-		}
-#ifndef WORDS_BIGENDIAN
-		if (!COB_FIELD_BINARY_SWAP(f)) {
-			return COB_TYPE_NUMERIC_COMP5;
-		}
-#endif
-	}
-	return (int)f->attr->type;
-}
-
-int
-cob_get_param_size (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_size");
-
-	if (f == NULL) {
-		return -1;
-	}
-	return (int)f->size;
-}
-
-int
-cob_get_param_sign (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_sign");
-	if (f == NULL) {
-		return -1;
-	}
-	if (COB_FIELD_HAVE_SIGN(f)) {
-		return 1;
-	}
-	return 0;
-}
-
-int
-cob_get_param_scale (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_scale");
-	if (f == NULL) {
-		return -1;
-	}
-	return (int)f->attr->scale;
-}
-
-int
-cob_get_param_digits (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_digits");
-	if (f == NULL) {
-		return -1;
-	}
-	return (int)f->attr->digits;
-}
-
-int
-cob_get_param_constant (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_constant");
-	if (f == NULL) {
-		return -1;
-	}
-	if (COB_FIELD_CONSTANT (f)) {
-		return 1;
-	}
-	return 0;
-}
-
-void *
-cob_get_param_data (int n)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_param_data");
-	if (f == NULL) {
-		return NULL;
-	}
-	return (void*)f->data;
-}
-
-cob_s64_t
-cob_get_s64_param (int n)
-{
-	void		*cbl_data;
-	int		size;
-	cob_s64_t	val;
-	double		dbl;
-	cob_field	temp;
-	cob_field	*f = cob_get_param_field (n, "cob_get_s64_param");
-
-	if (f == NULL) {
-		return -1;
-	}
-	cbl_data = f->data;
-	size = f->size;
-
-	switch (f->attr->type) {
-	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_s64_pic9 (cbl_data, size);
-	case COB_TYPE_NUMERIC_BINARY:
-#ifndef WORDS_BIGENDIAN
-		if (COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_s64_compx (cbl_data, size);
-		}
-		return cob_get_s64_comp5 (cbl_data, size);
-#else
-		return cob_get_s64_compx (cbl_data, size);
-#endif
-	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_s64_comp3 (cbl_data, size);
-	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (cbl_data);
-		val = (cob_s64_t)dbl; // possible data loss is explicit requested
-		return val;
-	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (cbl_data);
-		val = (cob_s64_t)dbl; // possible data loss is explicit requested
-		return val;
-	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_s64_pic9 (cbl_data, size);
-	default:
-		temp.size = 8;
-		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
-		cob_move (f, &temp);
-		return val;
-	}
-}
-
-cob_u64_t
-cob_get_u64_param (int n)
-{
-	void		*cbl_data;
-	int		size;
-	cob_u64_t	val;
-	double		dbl;
-	cob_field	temp;
-	cob_field	*f = cob_get_param_field (n, "cob_get_u64_param");
-
-	if (f == NULL) {
-		return 0;
-	}
-
-	cbl_data = f->data;
-	size    = f->size;
-	switch (COB_MODULE_PTR->cob_procedure_params[n - 1]->attr->type) {
-	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_u64_pic9 (cbl_data, size);
-
-	case COB_TYPE_NUMERIC_BINARY:
-#ifndef WORDS_BIGENDIAN
-		if (COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_u64_compx (cbl_data, size);
-		}
-		return cob_get_u64_comp5 (cbl_data, size);
-#else
-		return cob_get_u64_compx (cbl_data, size);
-#endif
-
-	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_u64_comp3 (cbl_data, size);
-
-	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (cbl_data);
-		val = (cob_u64_t)dbl; // possible data loss is explicit requested
-		return val;
-	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (cbl_data);
-		val = (cob_u64_t)dbl; // possible data loss is explicit requested
-		return val;
-	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_u64_pic9 (cbl_data, size);
-	default:
-		temp.size = 8;
-		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binull_attr;
-		const_binull_attr.scale = f->attr->scale;
-		cob_move (f, &temp);
-		return val;
-	}
-}
-
-char *
-cob_get_picx_param (int n, void *char_field, int char_len)
-{
-	void		*cbl_data;
-	int		size;
-	cob_field	*f = cob_get_param_field (n, "cob_get_picx_param");
-
-	if (f == NULL) {
-		return NULL;
-	}
-
-	cbl_data = f->data;
-	size    = f->size;
-	return cob_get_picx (cbl_data, size, char_field, char_len);
-}
-
-void
-cob_put_s64_param (int n, cob_s64_t val)
-{
-	void		*cbl_data;
-	int		size;
-	float		flt;
-	double		dbl;
-	cob_field	temp;
-	cob_field	*f = cob_get_param_field (n, "cob_put_s64_param");
-
-	if (f == NULL) {
-		return;
-	}
-
-	cbl_data = f->data;
-	size = f->size;
-	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning (_("%s: attempt to over-write constant param %d with " CB_FMT_LLD),
-						"cob_put_s64_param", n, val);
-		return;
-	}
-
-	switch (f->attr->type) {
-	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_s64_pic9 (val, cbl_data, size);
-		return;
-
-	case COB_TYPE_NUMERIC_BINARY:
-#ifndef WORDS_BIGENDIAN
-		if (COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_s64_compx (val, cbl_data, size);
-		} else {
-			cob_put_s64_comp5 (val, cbl_data, size);
-		}
-#else
-		cob_put_s64_compx (val, cbl_data, size);
-#endif
-		return;
-
-	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_s64_comp3 (val, cbl_data, size);
-		return;
-
-	case COB_TYPE_NUMERIC_FLOAT:
-		flt = (float)val;  // possible data loss is explicit requested
-		cob_put_comp1 (flt, cbl_data);
-		return;
-
-	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = (double)val; // possible data loss is explicit requested
-		cob_put_comp2 (dbl, cbl_data);
-		return;
-	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
-		temp.size = 8;
-		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
-		cob_move (&temp, f);
-		return;
-	}
-}
-
-void
-cob_put_u64_param (int n, cob_u64_t val)
-{
-	void		*cbl_data;
-	int		size;
-	float		flt;
-	double		dbl;
-	cob_field	temp;
-	cob_field	*f = cob_get_param_field (n, "cob_put_u64_param");
-
-	if (f == NULL) {
-		return;
-	}
-
-	cbl_data = f->data;
-	size = f->size;
-	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning (_("%s: attempt to over-write constant param %d with " CB_FMT_LLD),
-							"cob_put_u64_param", n, val);
-		return;
-	}
-	switch (f->attr->type) {
-	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_u64_pic9 (val, cbl_data, size);
-		return;
-
-	case COB_TYPE_NUMERIC_BINARY:
-#ifndef WORDS_BIGENDIAN
-		if (COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_u64_compx (val, cbl_data, size);
-		} else {
-			cob_put_u64_comp5 (val, cbl_data, size);
-		}
-#else
-		cob_put_u64_compx (val, cbl_data, size);
-#endif
-		return;
-
-	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_u64_comp3 (val, cbl_data, size);
-		return;
-
-	case COB_TYPE_NUMERIC_FLOAT:
-		flt = (float)val;  // possible data loss is explicit requested
-		cob_put_comp1 (flt, cbl_data);
-		return;
-
-	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = (double)val;  // possible data loss is explicit requested
-		cob_put_comp2 (dbl, cbl_data);
-		return;
-	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
-		temp.size = 8;
-		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
-		cob_move (&temp, f);
-		return;
-	}
-}
-
-void
-cob_put_picx_param (int n, void *char_field)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_put_picx_param");
-
-	if (f == NULL || char_field == NULL) {
-		return;
-	}
-
-	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning (_("%s: attempt to over-write constant param %d with '%s'"),
-						"cob_put_picx_param", n, (char*)char_field);
-		return;
-	}
-
-	cob_put_picx (f->data, f->size, char_field);
-}
-
-void *
-cob_get_grp_param (int n, void *char_field, int len)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_get_grp_param");
-
-	if (f == NULL) {
-		return NULL;
-	}
-
-	if (len <= 0) {
-		len = f->size;
-	}
-
-	if (char_field == NULL) {
-		if (len < f->size) {
-			len = f->size;
-		}
-		char_field = cob_malloc (len);
-	}
-	memcpy (char_field, f->data, f->size);
-	return char_field;
-}
-
-void
-cob_put_grp_param (int n, void *char_field, int len)
-{
-	cob_field	*f = cob_get_param_field (n, "cob_put_grp_param");
-
-	if (f == NULL || char_field == NULL) {
-		return;
-	}
-
-	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning (_("%s: attempt to over-write constant param %d"), "cob_put_grp_param", n);
-		return;
-	}
-
-	if (len <= 0 || len > f->size) {
-		len = f->size;
-	}
-	memcpy (f->data, char_field, len);
-}
-
-/* Create copy of field and mark as a CONSTANT */
-void
-cob_field_constant (cob_field *f, cob_field *t, cob_field_attr *a, void *d)
-{
-	memcpy((void*)t, (void*)f, sizeof(cob_field));
-	memcpy((void*)a, (void*)f->attr, sizeof(cob_field_attr));
-	t->data = d;
-	t->attr = a;
-	a->flags |= COB_FLAG_CONSTANT;
-	memcpy((void*)t->data, (void*)f->data, f->size);
 }

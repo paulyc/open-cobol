@@ -1,12 +1,12 @@
 /*
-   Copyright (C) 2002-2012, 2014-2017 Free Software Foundation, Inc.
+   Copyright (C) 2002-2012, 2014-2016 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
 
    The GnuCOBOL runtime library is free software: you can redistribute it
    and/or modify it under the terms of the GNU Lesser General Public License
-   as published by the Free Software Foundation, either version 3 of the
+   as published by the Freecob_freetware Foundation, either version 3 of the
    License, or (at your option) any later version.
 
    GnuCOBOL is distributed in the hope that it will be useful,
@@ -71,9 +71,7 @@
 #define	close		_close
 #define	unlink		_unlink
 #define	fdopen		_fdopen
-#ifndef lseek
 #define lseek		_lseeki64
-#endif
 #endif
 #define off_t		cob_s64_t
 
@@ -1097,8 +1095,18 @@ cob_file_open (cob_file *f, char *filename, const int mode, const int sharing)
 		/* Possible Solutions: */
 		/* a) Create the file and reopen it with a+ */
 		/* b) Check this stuff in EINVAL and just go on */
+#ifdef _MSC_VER
+		/* 
+		 * In MSC a+ is causing problems... 
+		 * According to the programmers guide only writing is allowed in append mode...
+		 * So we use mode "a" instead which is working properly.
+		 */
+		if (!cobsetptr->cob_unix_lf) {
+			fmode = "a";
+#else
 		if (!cobsetptr->cob_unix_lf) {
 			fmode = "a+";
+#endif
 		} else {
 			fmode = "ab+";
 		}
@@ -3020,10 +3028,7 @@ dobuild:
 #endif
 
 	COB_UNUSED (sharing);
-	if (cobsetptr->bdb_home != NULL
-	 && bdb_env == NULL) {		/* Join BDB, on first OPEN of INDEXED file */
-		join_environment ();
-	}
+
 	cob_chk_file_mapping ();
 
 #if	0	/* RXWRXW - Access check BDB Human */
@@ -3144,7 +3149,7 @@ dobuild:
 					bdb_env->dbremove (bdb_env, NULL, runtime_buffer, NULL, 0);
 				} else {
 					/* FIXME: test "First READ on empty SEQUENTIAL INDEXED file ..."
-					   on OPEN-OUTPUT results with MinGW & BDB 6 in
+					   on OPEN-OUTPUT results with MinGW & BDB 6 in 
 					   BDB1565 DB->pget: method not permitted before handle's open method
 					*/
 					p->db[i]->remove (p->db[i], runtime_buffer, NULL, 0);
@@ -3162,7 +3167,7 @@ dobuild:
 		/* Open db */
 		if (!ret) {
 			/* FIXME: test "First READ on empty SEQUENTIAL INDEXED file ..."
-			   on OPEN-OUTPUT results with MinGW & BDB 6 in
+			   on OPEN-OUTPUT results with MinGW & BDB 6 in 
 			   BDB0588 At least one secondary cursor must be specified to DB->join
 			*/
 			ret = p->db[i]->open (p->db[i], NULL, runtime_buffer, NULL,
@@ -3178,7 +3183,6 @@ dobuild:
 			cob_free (p->db);
 			cob_free (p->last_readkey);
 			cob_free (p->last_dupno);
-			cob_free (p->rewrite_sec_key);
 			cob_free (p->cursor);
 			if (bdb_env != NULL) {
 				bdb_env->lock_put (bdb_env, &p->bdb_file_lock);
@@ -3592,6 +3596,14 @@ indexed_read_next (cob_file *f, const int read_opts)
 	fh = f->file;
 	ret = COB_STATUS_00_SUCCESS;
 	lmode = 0;
+
+	if (f->flag_nonexistent) {
+		if (f->flag_first_read == 0) {
+			return COB_STATUS_23_KEY_NOT_EXISTS;
+		}
+		f->flag_first_read = 0;
+		return COB_STATUS_10_END_OF_FILE;
+	}
 
 	if (fh->curkey == -1) {
 		/* Switch to primary index */
@@ -4462,83 +4474,6 @@ cob_file_unlock (cob_file *f)
 
 /* Global functions */
 
-/*
- * Allocate memory for 'IS EXTERNAL' cob_file
- */
-void
-cob_file_external_addr (const char *exname,
-		cob_file **pfl, cob_file_key **pky,
-		const int nkeys, const int linage)
-{
-	cob_file	*fl;
-	fl = cob_external_addr (exname, sizeof(cob_file));
-	if (fl->file_version == 0)
-		fl->file_version = COB_FILE_VERSION;
-
-	if (nkeys > 0
-	 && fl->keys != NULL) {
-		fl->keys = cob_cache_malloc (sizeof(cob_file_key) * nkeys);
-	}
-	if (pky != NULL) {
-		*pky = fl->keys;
-	}
-
-	if (linage > 0
-	 && fl->linorkeyptr == NULL) {
-		fl->linorkeyptr = cob_cache_malloc (sizeof(cob_linage));
-	}
-	*pfl = fl;
-}
-
-/*
- * Allocate memory for cob_file
- */
-void
-cob_file_malloc (cob_file **pfl, cob_file_key **pky,
-		 const int nkeys, const int linage)
-{
-	cob_file	*fl;
-	fl = cob_cache_malloc (sizeof(cob_file));
-	fl->file_version = COB_FILE_VERSION;
-
-	if (nkeys > 0
-	 && pky != NULL) {
-		*pky = fl->keys = cob_cache_malloc (sizeof(cob_file_key) * nkeys);
-	}
-
-	if (linage > 0) {
-		fl->linorkeyptr = cob_cache_malloc (sizeof(cob_linage));
-	}
-	*pfl = fl;
-}
-
-/*
- * Free memory for cob_file
- */
-void
-cob_file_free (cob_file **pfl, cob_file_key **pky)
-{
-	cob_file	*fl;
-	if (pky != NULL) {
-		if (*pky != NULL) {
-			cob_cache_free (*pky);
-			*pky = NULL;
-		}
-	}
-	if (pfl != NULL) {
-		fl = *pfl;
-		if (fl->linorkeyptr) {
-			cob_cache_free (fl->linorkeyptr);
-			fl->linorkeyptr = NULL;
-		}
-		if (*pfl != NULL) {
-			cob_cache_free (*pfl);
-			*pfl = NULL;
-		}
-	}
-}
-
-
 void
 cob_unlock_file (cob_file *f, cob_field *fnstatus)
 {
@@ -4819,7 +4754,7 @@ cob_read_next (cob_file *f, cob_field *fnstatus, const int read_opts)
 
 	if (unlikely(f->flag_nonexistent)) {
 		if (f->flag_first_read == 0) {
-			save_status (f, fnstatus, COB_STATUS_46_READ_ERROR);
+			save_status (f, fnstatus, COB_STATUS_23_KEY_NOT_EXISTS);
 			return;
 		}
 		f->flag_first_read = 0;
@@ -5712,6 +5647,22 @@ unique_copy (unsigned char *s1, const unsigned char *s2)
 	} while (--size);
 }
 
+/* Returns filesize */
+long int 
+get_filesize(const char* path) {
+	struct stat s;
+	int f = 0;
+
+	if((f = open(path, O_BINARY)) != 0) {
+		fstat(f, &s);
+		close(f);
+		return (long int) s.st_size;
+	}
+
+	close(f);
+	return -1;
+}
+
 static int
 cob_file_sort_compare (struct cobitem *k1, struct cobitem *k2, void *pointer)
 {
@@ -6222,9 +6173,7 @@ cob_file_sort_giving (cob_file *sort_file, const size_t varcnt, ...)
 				sort_file->file_status[1] = '0';
 			} else {
 				hp = sort_file->file;
-				if (hp->sort_return) {
-					*(int *)(hp->sort_return) = 16;
-				}
+				*(int *)(hp->sort_return) = 16;
 				sort_file->file_status[0] = '3';
 				sort_file->file_status[1] = '0';
 			}
@@ -6275,10 +6224,8 @@ cob_file_sort_init (cob_file *f, const unsigned int nkeys,
 		p->chunk_size += p->alloc_size - (p->chunk_size % p->alloc_size);
 	}
 	p->pointer = f;
-	if (sort_return) {
-		p->sort_return = sort_return;
-		*(int *)sort_return = 0;
-	}
+	p->sort_return = sort_return;
+	*(int *)sort_return = 0;
 	p->mem_base = cob_fast_malloc (sizeof (struct sort_mem_struct));
 	p->mem_base->mem_ptr = cob_fast_malloc (p->chunk_size);
 	p->mem_base->next = NULL;
@@ -6348,7 +6295,7 @@ cob_file_release (cob_file *f)
 		save_status (f, fnstatus, COB_STATUS_00_SUCCESS);
 		return;
 	}
-	if (likely(hp && hp->sort_return)) {
+	if (likely(hp)) {
 		*(int *)(hp->sort_return) = 16;
 	}
 	save_status (f, fnstatus, COB_STATUS_30_PERMANENT_ERROR);
@@ -6375,7 +6322,7 @@ cob_file_return (cob_file *f)
 		save_status (f, fnstatus, COB_STATUS_10_END_OF_FILE);
 		return;
 	}
-	if (likely(hp && hp->sort_return)) {
+	if (likely(hp)) {
 		*(int *)(hp->sort_return) = 16;
 	}
 	save_status (f, fnstatus, COB_STATUS_30_PERMANENT_ERROR);
@@ -6474,6 +6421,7 @@ cob_init_fileio (cob_global *lptr, cob_settings *sptr)
 #ifdef	WITH_DB
 	bdb_env = NULL;
 	bdb_data_dir = NULL;
+	join_environment ();
 	record_lock_object = cob_malloc ((size_t)1024);
 	bdb_buff = cob_malloc ((size_t)COB_SMALL_BUFF);
 	rlo_size = 1024;

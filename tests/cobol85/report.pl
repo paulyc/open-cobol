@@ -19,9 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
-use strict;
-use warnings;
-
 $SIG{INT} = sub { die "\nInterrupted\n" };
 $SIG{QUIT} = sub { die "\nInterrupted\n" };
 $SIG{PIPE} = sub { die "\nInterrupted\n" };
@@ -45,29 +42,27 @@ if ($opt) {
 	$opt = "-std=cobol85"
 }
 
-if (defined $cobc) {
+if ($cobc ne "") {
 	$cobc = "$cobc $opt";
 } else {
 	$cobc = "cobc $opt";
 }
 
-if (!defined $cobcrun) {
+if ($cobcrun eq "") {
 	$cobcrun = "cobcrun";
 }
 
-if (defined $cobcrun_direct) {
-    	$cobcrun_direct = "$cobcrun_direct ";
-} else {
-	$cobcrun_direct = "";
+if ($cobcrun_direct ne "") {
+	$cobcrun_direct = "$cobcrun_direct ";
 }
 
 # temporary directory (used for fifos)
 my $tmpdir = $ENV{"TMPDIR"};
-if (!defined $tmpdir) {
+if ($tmpdir eq "") {
 	$tmpdir = $ENV{"TEMP"};
-	if (!defined $tmpdir) {
+	if ($tmpdir eq "") {
 		$tmpdir = $ENV{"TMP"};
-		if (!defined $tmpdir) {
+		if ($tmpdir eq "") {
 			$tmpdir = "/tmp";
 		}
 	}
@@ -105,20 +100,16 @@ $ENV{"COB_DISABLE_WARNINGS"} = "Y";
 # Dealt with lower down in the code
 
 # Skip DB203A if no ISAM configured
-my %skip;
 if ($ENV{'COB_HAS_ISAM'} eq "no") {
 	$skip{DB203A} = 1;
 }
 
 # OBNC1M tests the STOP literal statement and requires user input with a final kill.
-my %raw_input;
 $raw_input{OBNC1M} = "\n\n\n\n\n\n\n\n\003"; # 8 newlines + kill character
-my %to_kill;
 $to_kill{OBNC1M} = 1;
 
 # NC114M test the compiler listing along to other parts.
-my %cobc_flags;
-$cobc_flags{NC114M} = "-t NC114M.lst";
+$cobc_flags{NC114M} = "-t NC114M.lst --no-symbols";
 
 # NC302M tests the compiler flagging of obsolete features, including STOP literal.
 $cobc_flags{NC302M} = "-Wobsolete";
@@ -132,7 +123,6 @@ $cobc_flags{DB304M} = "-Wobsolete";
 # The following tests are for compiler flagging and cannot run without abends.
 # TO-DO: automatically check cobc emits the right number of warnings with
 # -Wobsolete (ignore high subset checking).
-my %comp_only;
 $comp_only{NC401M} = 1;
 $comp_only{RL301M} = 1;
 $comp_only{RL401M} = 1;
@@ -149,38 +139,36 @@ $comp_only{DB205A} = 1;
 # Programs that do not produce any meaningful test results
 # However they must execute successfully
 
-my %no_output;
-$no_output{NC110M} = 1;
-$no_output{NC214M} = 1;
-$no_output{OBSQ3A} = 1;
-$no_output{ST102A} = 1;
-$no_output{ST109A} = 1;
-$no_output{ST110A} = 1;
-$no_output{ST112M} = 1;
-$no_output{ST113M} = 1;
-$no_output{ST115A} = 1;
-$no_output{ST116A} = 1;
-$no_output{ST120A} = 1;
-$no_output{ST122A} = 1;
-$no_output{ST123A} = 1;
-$no_output{DB301M} = 1;
-$no_output{DB302M} = 1;
-$no_output{DB303M} = 1;
-$no_output{DB305M} = 1;
-$no_output{IF402M} = 1;
+$nooutput{NC110M} = 1;
+$nooutput{NC214M} = 1;
+$nooutput{OBSQ3A} = 1;
+$nooutput{ST102A} = 1;
+$nooutput{ST109A} = 1;
+$nooutput{ST110A} = 1;
+$nooutput{ST112M} = 1;
+$nooutput{ST113M} = 1;
+$nooutput{ST115A} = 1;
+$nooutput{ST116A} = 1;
+$nooutput{ST120A} = 1;
+$nooutput{ST122A} = 1;
+$nooutput{ST123A} = 1;
+$nooutput{DB301M} = 1;
+$nooutput{DB302M} = 1;
+$nooutput{DB303M} = 1;
+$nooutput{DB305M} = 1;
+$nooutput{IF402M} = 1;
 
 $cobc_flags{SM206A} = "-fdebugging-line";
 
 # Programs that need to be "visual" inspected
 # NC113M: inspected additional to normal tests for output of hex values
 # SQ101M, SQ201M, SQ207M, SQ208M, SQ209M, SQ210M: send report.log to printer and check result
-#
+# 
 
 open (LOG, "> report.txt") or die;
 print LOG "Filename    total pass fail deleted inspect\n";
 print LOG "--------    ----- ---- ---- ------- -------\n";
 
-my $in;
 foreach $in (glob("lib/*.CBL")) {
 	print "$compile_module $in\n";
 	$ret = system ("trap 'exit 77' INT QUIT TERM PIPE; $compile_module $in");
@@ -199,7 +187,7 @@ foreach $in (sort (glob("*.{CBL,SUB}"))) {
 
 	$exe =~ s/\.CBL//;
 	$exe =~ s/\.SUB//;
-
+	
 	printf LOG "%-12s", $in;
 	if ($skip{$exe}) {
 		$test_skipped++;
@@ -238,8 +226,8 @@ foreach $in (sort (glob("*.{CBL,SUB}"))) {
 	$compile_current = "$compile_current 1> $exe.cobc.out 2>&1";
 
 	my $total = 0;
-	my $pass = 0;
-	my $fail = 0;
+	my $pass= 0;
+	my $fail= 0;
 	my $deleted = 0;
 	my $inspect = 0;
 
@@ -258,7 +246,7 @@ foreach $in (sort (glob("*.{CBL,SUB}"))) {
 	#	$total = 7; --> aus Quelle übernehmen
 	#	open (my $COBC_OUT, '<', "$exe.cobc.out");
 	#	while (<$COBC_OUT>) {
-	#		if
+	#		if 
 	#		if (/ warning: ([A-Z-]+) .* obsolete /) {
 	#			$pass += 1;
 	#			next;
@@ -273,8 +261,8 @@ foreach $in (sort (glob("*.{CBL,SUB}"))) {
 		$total_ok++;
 		next;
 	}
-
-
+	
+	
 	if ($in =~ /\.CBL/) {
 		if ($ENV{'DB_HOME'}) {
 			$ret = system ("trap 'exit 77' INT QUIT TERM PIPE; rm -f XXXXX*; rm -f $ENV{'DB_HOME'}/XXXXX*");
@@ -297,18 +285,14 @@ foreach $in (sort (glob("*.{CBL,SUB}"))) {
 	if ($subt eq "RW") {
 		$ENV{"DD_XXXXX049"} = "$exe.rep";
 	}
-	$ENV{"REPORT"} = "$exe.log";
+	$ENV{"report.log"} = "$exe.log";
 	if ($raw_input{$exe}) {
 		$cmd = "$cmd < $exe.inp";
 		system ("echo \"$raw_input{$exe}\" > $exe.inp");
 	}
 
 testrepeat:
-	if (!$to_kill{$exe}) {
-		$ret = system ("trap 'exit 77' INT QUIT TERM PIPE; $cmd > $exe.out");
-	} else {
-		$ret = system ("trap 'exit 77' INT QUIT TERM PIPE; $cmd > $exe.out 2>/dev/null");
-	}
+	$ret = system ("trap 'exit 77' INT QUIT TERM PIPE; $cmd > $exe.out");
 
 	if ($ret != 0 && !($ret >> 2 && $to_kill{$exe})) {
 		if (($ret >> 8) == 77) {
@@ -318,10 +302,10 @@ testrepeat:
 		print LOG "***** execute error $ret *****\n";
 		next;
 	}
-	if ($no_output{$exe}) {
+	if ($nooutput{$exe}) {
 		$total = 1;
 		$pass = 1;
-	} elsif (open (my $PRT, '<', $ENV{"REPORT"})) {
+	} elsif (open (my $PRT, '<', "$exe.log")) {
 
 		# NC107A: check hex values in report
 		if ($exe eq "NC107A") {
@@ -424,6 +408,7 @@ testrepeat:
 							$pass += 1;
 						}
 					}
+					
 				}
 			}
 

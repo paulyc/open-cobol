@@ -3,14 +3,6 @@
 @echo off
 setlocal
 
-:: check if started directly
-echo %cmdcmdline% | find /i "%~0" >nul
-if errorlevel 1 (
-   set interactive=1
-) else (
-   set interactive=0
-)
-
 :: Set distribution folder
 set COB_DIST_PATH="%~dp0\dist\"
 
@@ -146,14 +138,20 @@ goto :eof
 mkdir extras
 copy "%COB_SOURCE_PATH%extras\*.cob"		extras\
 copy "%COB_SOURCE_PATH%extras\README"		extras\README.txt
+mkdir debugger
+copy "%COB_SOURCE_PATH%debugger\*.cob"		debugger\
+copy "%COB_SOURCE_PATH%debugger\*.cpy"		debugger\
+copy "%COB_SOURCE_PATH%debugger\ChangeLog"	debugger\ChangeLog.txt
 
 if "%HAVE32%"=="1" (
    echo.
    echo.
    echo Using created GnuCOBOL distribution -Win32- to compile extras
+   echo and debugger frontend
    cd "%COB_DIST_PATH%bin"
    call ..\set_env_vs.bat
    cobc -m -Wall -std=mf ..\extras\CBL_OC_DUMP.cob -v
+   cobc -m -Wall -std=mf ..\debugger\gc-debugger.cob -I ..\debugger -v
    cd ..
 )
 
@@ -161,9 +159,11 @@ if "%HAVE64%"=="1" (
    echo.
    echo.
    echo Using created GnuCOBOL distribution -x64- to compile extras
+   echo and debugger frontend
    cd "%COB_DIST_PATH%bin_x64"
    call ..\set_env_vs_x64.bat
    cobc -m -Wall -std=mf ..\extras\CBL_OC_DUMP.cob -v
+   cobc -m -Wall -std=mf ..\debugger\gc-debugger.cob -I ..\debugger -v
    cd ..
 )
 
@@ -182,8 +182,5 @@ if exist "%ProgramFiles%\7-Zip\7z.exe" (
 
 
 :over
-if _%interactive%_==_0_ (
-   echo.
-   pause
-)
+pause
 endlocal

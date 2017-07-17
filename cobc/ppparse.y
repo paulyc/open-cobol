@@ -1,6 +1,6 @@
 /*
-   Copyright (C) 2001-2012, 2015-2017 Free Software Foundation, Inc.
-   Written by Keisuke Nishida, Roger While, Simon Sobisch
+   Copyright (C) 2001-2012, 2015 Free Software Foundation, Inc.
+   Written by Keisuke Nishida, Roger While
 
    This file is part of GnuCOBOL.
 
@@ -26,11 +26,6 @@
 %verbose
 %name-prefix="pp" // recent versions want %api.prefix "pp", older cannot compile this
 
-/* NOTE:
-   support without = was added in Bison 2.4 (released 2008-11-02, we currently use 2.3),
-   bison 3.0 (released 2013-07-25) added a warning if with = is used
-*/
-
 %{
 #include "config.h"
 
@@ -42,7 +37,6 @@
 
 #define	COB_IN_PPPARSE	1
 #include "cobc.h"
-#include "tree.h"
 
 #ifndef	_STDLIB_H
 #define	_STDLIB_H 1
@@ -57,14 +51,10 @@
 #define COND_GE		4U
 #define COND_NE		5U
 
-/* Global variables */
-
-int				current_call_convention;
-
 /* Local variables */
 
-static struct cb_define_struct	*ppp_setvar_list = NULL;
-static unsigned int		current_cmd = 0;
+static struct cb_define_struct	*ppp_setvar_list;
+static unsigned int		current_cmd;
 
 #if	0	/* RXWRXW OPT */
 static const char	* const compopts[] = {
@@ -252,7 +242,7 @@ ppp_compare_vals (const struct cb_define_struct *p1,
 		return 0;
 	}
 	if (p1->deftype != p2->deftype) {
-		cb_warning (COBC_WARN_FILLER, _("directive comparison on different types"));
+		cb_warning (_("directive comparison on different types"));
 		return 0;
 	}
 	if (p1->deftype == PLEX_DEF_LIT) {
@@ -320,14 +310,14 @@ ppp_define_add (struct cb_define_struct *list, const char *name,
 	for (l = list; l; l = l->next) {
 		if (!strcasecmp (name, l->name)) {
 			if (!override && l->deftype != PLEX_DEF_DEL) {
-				cb_error (_("duplicate DEFINE directive '%s'"), name);
+				cb_error (_("duplicate define"));
 				return NULL;
 			}
 			if (l->value) {
 				l->value = NULL;
 			}
 			if (ppp_set_value (l, text)) {
-				cb_error (_("invalid constant in DEFINE directive"));
+				cb_error (_("invalid constant"));
 				return NULL;
 			}
 			return list;
@@ -337,7 +327,7 @@ ppp_define_add (struct cb_define_struct *list, const char *name,
 	p = cobc_plex_malloc (sizeof (struct cb_define_struct));
 	p->name = cobc_plex_strdup (name);
 	if (ppp_set_value (p, text)) {
-		cb_error (_("invalid constant in DEFINE directive"));
+		cb_error (_("invalid constant"));
 		return NULL;
 	}
 
@@ -369,21 +359,12 @@ ppp_define_del (const char *name)
 	}
 }
 
-void
-ppp_clear_lists ( void )
-{
-	ppp_setvar_list = NULL;
-}
-
-struct cb_define_struct *
+static struct cb_define_struct *
 ppp_search_lists (const char *name)
 {
 	struct cb_define_struct	*p;
 
 	for (p = ppp_setvar_list; p; p = p->next) {
-		if (p->name == NULL) {
-			continue;
-		}
 		if (!strcasecmp (name, p->name)) {
 			if (p->deftype != PLEX_DEF_DEL) {
 				return p;
@@ -514,8 +495,6 @@ ppparse_clear_vars (const struct cb_define_struct *p)
 						  q->name,
 						  q->value, 0);
 	}
-	/* reset CALL CONVENTION */
-	current_call_convention = CB_CONV_COBOL;
 }
 
 %}
@@ -549,19 +528,8 @@ ppparse_clear_vars (const struct cb_define_struct *p)
 
 %token GARBAGE		"word"
 
+%token PAGE_DIRECTIVE
 %token LISTING_DIRECTIVE
-%token LISTING_STATEMENT
-%token TITLE_STATEMENT
-
-%token CONTROL_STATEMENT
-%token SOURCE
-%token NOSOURCE
-%token LIST
-%token NOLIST
-%token MAP
-%token NOMAP
-
-%token LEAP_SECOND_DIRECTIVE
 
 %token SOURCE_DIRECTIVE
 %token FORMAT
@@ -569,12 +537,6 @@ ppparse_clear_vars (const struct cb_define_struct *p)
 %token FIXED
 %token FREE
 %token VARIABLE
-
-%token CALL_DIRECTIVE
-%token COBOL
-%token TOK_EXTERN		"EXTERN"
-%token STDCALL
-%token STATIC
 
 %token DEFINE_DIRECTIVE
 %token AS
@@ -652,11 +614,6 @@ statement:
   copy_statement DOT
 | replace_statement DOT
 | directive TERMINATOR
-| listing_statement
-| CONTROL_STATEMENT control_options _dot TERMINATOR
-  {
-	CB_PENDING (_("*CONTROL statement"));
-  }
 ;
 
 directive:
@@ -664,8 +621,8 @@ directive:
 | DEFINE_DIRECTIVE define_directive
 | SET_DIRECTIVE set_directive
 | TURN_DIRECTIVE turn_directive
+| PAGE_DIRECTIVE page_directive
 | LISTING_DIRECTIVE listing_directive
-| LEAP_SECOND_DIRECTIVE leap_second_directive
 | IF_DIRECTIVE
   {
 	current_cmd = PLEX_ACT_IF;
@@ -684,17 +641,6 @@ directive:
   {
 	plex_action_directive (PLEX_ACT_END, 0);
   }
-| CALL_DIRECTIVE
-  {
-	current_call_convention = 0;
-  }
-  call_directive
-  {
-	if (current_call_convention == CB_CONV_STATIC_LINK) {
-		current_call_convention |= CB_CONV_COBOL;
-	};
-  }
-  
 ;
 
 set_directive:
@@ -703,15 +649,14 @@ set_directive:
 ;
 
 set_choice:
-  CONSTANT VARIABLE_NAME LITERAL
+  CONSTANT VARIABLE_NAME _as LITERAL
   {
-	/* note: the old version was _as LITERAL but MF doesn't supports this */
 	struct cb_define_struct	*p;
 
-	p = ppp_define_add (ppp_setvar_list, $2, $3, 1);
+	p = ppp_define_add (ppp_setvar_list, $2, $4, 1);
 	if (p) {
 		ppp_setvar_list = p;
-		fprintf (ppout, "#DEFLIT %s %s\n", $2, $3);
+		fprintf (ppout, "#DEFLIT %s %s\n", $2, $4);
 	}
   }
 | VARIABLE_NAME set_options
@@ -820,14 +765,9 @@ format_type:
 ;
 
 define_directive:
-  VARIABLE_NAME _as LITERAL _override
+  VARIABLE_NAME _as OFF
   {
-	struct cb_define_struct	*p;
-
-	p = ppp_define_add (ppp_setvar_list, $1, $3, $4);
-	if (p) {
-		ppp_setvar_list = p;
-	}
+	ppp_define_del ($1);
   }
 | VARIABLE_NAME _as PARAMETER _override
   {
@@ -863,25 +803,23 @@ define_directive:
 		}
 	}
   }
-| VARIABLE_NAME _as OFF
+| VARIABLE_NAME _as LITERAL _override
   {
-	ppp_define_del ($1);
+	struct cb_define_struct	*p;
+
+	p = ppp_define_add (ppp_setvar_list, $1, $3, $4);
+	if (p) {
+		ppp_setvar_list = p;
+	}
   }
 | CONSTANT VARIABLE_NAME _as LITERAL _override
   {
-  /* OpenCOBOL/GnuCOBOL 2.0 extension: MF $SET CONSTANT in 2002+ style as
-     >> DEFINE CONSTANT var [AS] literal  archaic extension:
-     use plain  >> DEFINE var [AS] literal  for conditional compilation and
-     use        01 CONSTANT with/without FROM clause  for constant definitions */
 	struct cb_define_struct	*p;
 
-	
-	if (cb_verify (cb_define_constant_directive, ">> DEFINE CONSTANT var")) {
-		p = ppp_define_add (ppp_setvar_list, $2, $4, $5);
-		if (p) {
-			ppp_setvar_list = p;
-			fprintf (ppout, "#DEFLIT %s %s%s\n", $2, $4, $5 ? " OVERRIDE" : "");
-		}
+	p = ppp_define_add (ppp_setvar_list, $2, $4, $5);
+	if (p) {
+		ppp_setvar_list = p;
+		fprintf (ppout, "#DEFLIT %s %s\n", $2, $4);
 	}
   }
 | variable_or_literal
@@ -891,42 +829,14 @@ define_directive:
 ;
 
 
-listing_directive:
-  /*  Note: processed in cobc.c */
-  /* empty (ON implied) */
-| ON
-| OFF
-;
-
-listing_statement:
-  LISTING_STATEMENT
-| TITLE_STATEMENT LITERAL _dot TERMINATOR
-;
-
-control_options:
-  control_option
-| control_options control_option
-;
-
-control_option:
-  SOURCE
-| NOSOURCE
-| LIST
-| NOLIST
-| MAP
-| NOMAP
-;
-
-_dot:
-| DOT
-;
-
-leap_second_directive:
-/* empty (OFF implied) */
-| ON
+page_directive:
   {
-	CB_PENDING (_("LEAP-SECOND ON directive"));
+	CB_PENDING (_("PAGE directive"));
   }
+;
+
+listing_directive:
+  ON
 | OFF
 ;
 
@@ -952,33 +862,6 @@ on_or_off:
 with_loc:
   WITH LOCATION
 | LOCATION
-;
-
-call_directive:
-  call_choice
-| call_directive call_choice
-;
-
-call_choice:
-  COBOL
-  {
-	current_call_convention |= CB_CONV_COBOL;
-	current_call_convention &= ~CB_CONV_STDCALL;
-  }
-| TOK_EXTERN
-  {
-	current_call_convention &= ~CB_CONV_STDCALL;
-	current_call_convention &= ~CB_CONV_COBOL;
-  }
-| STDCALL
-  {
-	current_call_convention |= CB_CONV_STDCALL;
-	current_call_convention &= ~CB_CONV_COBOL;
-  }
-| STATIC
-  {
-	current_call_convention |= CB_CONV_STATIC_LINK;
-  }
 ;
 
 if_directive:

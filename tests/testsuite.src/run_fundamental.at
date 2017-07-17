@@ -1,4 +1,4 @@
-## Copyright (C) 2003-2012, 2014-2015, 2017 Free Software Foundation, Inc.
+## Copyright (C) 2003-2012, 2014-2015 Free Software Foundation, Inc.
 ## Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart, Ron Norman
 ##
 ## This file is part of GnuCOBOL.
@@ -363,7 +363,7 @@ AT_CHECK([./prog], [0],
 AT_CLEANUP
 
 
-AT_SETUP([MOVE to item with simple and floating insertion])
+AT_SETUP([Move to item with simple and floating insertion])
 AT_KEYWORDS([fundamental edited editing])
 
 AT_DATA([prog.cob], [
@@ -619,25 +619,25 @@ AT_DATA([prog.cob], [
             05 FIELD2 PIC X(10).
 
         PROCEDURE DIVISION.
-           MOVE "Hallo" TO FIELD1.
-           MOVE "1234567890" TO FIELD2.
+        MOVE "Hallo" TO FIELD1.
+        MOVE "1234567890" TO FIELD2.
 
-           MOVE FIELD2 TO STRUCTURE.
-           IF FIELD1 not = "12345"
-              DISPLAY "error: 1: " FIELD1
-              END-DISPLAY
+        MOVE FIELD2 TO STRUCTURE.
+        IF FIELD1 not = "12345"
+           DISPLAY "error: 1: " FIELD1
+           END-DISPLAY
+        END-IF
+        IF FIELD2 not = "67890     "
+           DISPLAY "error: 2: " FIELD2
+               END-DISPLAY
            END-IF
-           IF FIELD2 not = "67890     "
-              DISPLAY "error: 2: " FIELD2
-              END-DISPLAY
-           END-IF
 
 
-           MOVE "Hallo" TO FIELD1.
-           MOVE "1234567890" TO FIELD2.
+        MOVE "Hallo" TO FIELD1.
+        MOVE "1234567890" TO FIELD2.
 
-           CALL "subprog" USING BY REFERENCE FIELD2 STRUCTURE
-           END-CALL
+        CALL "subprog" USING BY REFERENCE FIELD2 STRUCTURE
+        END-CALL
 
            STOP RUN.
 ])
@@ -647,123 +647,6 @@ AT_CHECK([$COMPILE prog.cob], [0], [],
 [prog.cob: 15: warning: overlapping MOVE may produce unpredictable results
 ])
 AT_CHECK([./prog], [0], [], [])
-
-AT_DATA([prog2.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog2.
-       DATA  DIVISION.
-       WORKING-STORAGE SECTION.
-       01  FILLER.
-         05  TSTMOV1 PIC X(479).
-         05  TSTMOV2 PIC X(10).
-       PROCEDURE DIVISION.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (2:9) TO TSTMOV2 (1:9)
-           IF TSTMOV2 NOT = "1234567899"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (1:8) TO TSTMOV2 (2:8)
-           IF TSTMOV2 = "0000000009"
-              DISPLAY "IBM style MOVE: " TSTMOV2
-           ELSE IF TSTMOV2 NOT = "0012345679"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE prog2.cob], [0], [],
-[prog2.cob: 11: warning: overlapping MOVE may produce unpredictable results
-prog2.cob: 17: warning: overlapping MOVE may produce unpredictable results
-])
-
-AT_CHECK([./prog2], [0],
-[  OK with MOVE: 1234567899
-  OK with MOVE: 0012345679
-], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([Overlapping MOVE])
-AT_KEYWORDS([fundamental])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog.
-       DATA  DIVISION.
-       WORKING-STORAGE SECTION.
-       01  FILLER.
-         05  TSTMOV1 PIC X(479).
-         05  TSTMOV2 PIC X(10).
-       PROCEDURE DIVISION.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (2:9) TO TSTMOV2 (1:9)
-           IF TSTMOV2 NOT = "1234567899"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (1:8) TO TSTMOV2 (2:8)
-           IF TSTMOV2 = "0000000009"
-              DISPLAY "IBM style MOVE: " TSTMOV2
-           ELSE IF TSTMOV2 NOT = "0012345679"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [],
-[prog.cob: 11: warning: overlapping MOVE may produce unpredictable results
-prog.cob: 17: warning: overlapping MOVE may produce unpredictable results
-])
-
-AT_CHECK([./prog], [0],
-[  OK with MOVE: 1234567899
-  OK with MOVE: 0012345679
-], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([IBM MOVE])
-AT_KEYWORDS([fundamental])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog.
-       DATA  DIVISION.
-       WORKING-STORAGE SECTION.
-       01  FILLER.
-         05  TSTMOV1 PIC X(479).
-         05  TSTMOV2 PIC X(10).
-       PROCEDURE DIVISION.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (2:9) TO TSTMOV2 (1:9)
-           IF TSTMOV2 NOT = "1234567899"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           MOVE "0123456789" TO TSTMOV2.
-           MOVE TSTMOV2 (1:8) TO TSTMOV2 (2:8)
-           IF TSTMOV2 = "0000000009"
-              DISPLAY "IBM style MOVE: " TSTMOV2
-           ELSE IF TSTMOV2 NOT = "0012345679"
-              DISPLAY "  PROBLEM MOVE: " TSTMOV2
-           ELSE
-              DISPLAY "  OK with MOVE: " TSTMOV2.
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE -fmove-ibm prog.cob], [0], [], [])
-
-AT_CHECK([./prog], [0],
-[  OK with MOVE: 1234567899
-IBM style MOVE: 0000000009
-], [])
 
 AT_CLEANUP
 
@@ -1333,6 +1216,131 @@ AT_CHECK([./prog], [0],
 ])
 AT_CLEANUP
 
+AT_SETUP([START RELATIVE (1)])
+AT_KEYWORDS([fundamental])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+       SELECT OPTIONAL TEST-FILE
+              ASSIGN      "TESTFILE"
+              ACCESS       DYNAMIC
+              ORGANIZATION RELATIVE
+              STATUS       TESTSTAT
+              RELATIVE KEY TESTKEY
+       .
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD  TEST-FILE.
+       01  TEST-REC     PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01  TESTKEY      USAGE BINARY-LONG.
+       01  TESTSTAT     PIC XX.
+           88  V-OK     VALUE "00" "05".
+       PROCEDURE        DIVISION.
+           DELETE FILE TEST-FILE.
+           OPEN  I-O   TEST-FILE.
+           IF NOT V-OK
+              DISPLAY "OPEN " TESTSTAT
+              END-DISPLAY
+              GOBACK
+           END-IF.
+           MOVE 99 TO TESTKEY.
+           START TEST-FILE KEY < TESTKEY
+           END-START.
+           IF TESTSTAT NOT = "23"
+              DISPLAY "START " TESTSTAT
+              END-DISPLAY
+           END-IF.
+           CLOSE TEST-FILE.
+       END PROGRAM prog.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([./prog], [0], [], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([START RELATIVE (2)])
+AT_KEYWORDS([fundamental])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+       SELECT OPTIONAL TEST-FILE
+              ASSIGN      "TESTFILE"
+              ACCESS       DYNAMIC
+              ORGANIZATION RELATIVE
+              STATUS       TESTSTAT
+              RELATIVE KEY TESTKEY
+       .
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD  TEST-FILE.
+       01  TEST-REC     PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01  TESTKEY      USAGE BINARY-LONG.
+       01  TESTSTAT     PIC XX.
+           88  V-OK     VALUE "00" "05".
+           88  V-ZERO   VALUE "00".
+       PROCEDURE        DIVISION.
+           DELETE FILE TEST-FILE.
+           OPEN  I-O   TEST-FILE.
+           IF NOT V-OK
+              DISPLAY "OPEN " TESTSTAT
+              END-DISPLAY
+              GOBACK
+           END-IF.
+           MOVE 3 TO TESTKEY.
+           MOVE "0003" TO TEST-REC.
+           WRITE TEST-REC INVALID KEY
+                 DISPLAY "WRITE " TESTSTAT
+                 END-DISPLAY
+           END-WRITE.
+           MOVE 2 TO TESTKEY.
+           MOVE "0002" TO TEST-REC.
+           WRITE TEST-REC INVALID KEY
+                 DISPLAY "WRITE " TESTSTAT
+                 END-DISPLAY
+           END-WRITE.
+           MOVE 99 TO TESTKEY.
+           START TEST-FILE KEY < TESTKEY
+           END-START.
+           IF NOT V-ZERO
+              DISPLAY "START " TESTSTAT
+              END-DISPLAY
+           END-IF.
+           IF TESTKEY NOT = 99
+              DISPLAY "TESTKEY " TESTKEY
+              END-DISPLAY
+           END-IF.
+           MOVE  SPACE TO TEST-REC.
+           READ  TEST-FILE NEXT
+           END-READ.
+           IF NOT V-ZERO
+              DISPLAY "READ " TESTSTAT
+              END-DISPLAY
+           END-IF.
+           IF TEST-REC NOT = "0003"
+              DISPLAY "READ RECORD " TEST-REC
+              END-DISPLAY
+           END-IF.
+           CLOSE TEST-FILE.
+       END PROGRAM prog.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([./prog], [0], [], [])
+
+AT_CLEANUP
+
 
 AT_SETUP([GLOBAL FD (1)])
 AT_KEYWORDS([fundamental])
@@ -1693,10 +1701,9 @@ AT_DATA([prog.cob], [
            END-DISPLAY.
            STOP RUN.
 ])
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([$COMPILE_MODULE -fpretty-display prog.cob], [0], [], [])
+
+AT_CHECK([$COMPILE -std=mf prog.cob], [0], [], [])
 AT_CHECK([./prog], [0], [+0+00+0+])
-AT_CHECK([$COBCRUN prog], [0], [+0+00+0+])
 
 AT_CLEANUP
 
@@ -3649,7 +3656,7 @@ AT_CLEANUP
 
 
 AT_SETUP([Numeric operations (7)])
-AT_KEYWORDS([fundamental add compute literal])
+AT_KEYWORDS([fundamental add compute])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -3940,54 +3947,6 @@ AT_CHECK([./prog], [0], [], [])
 AT_CLEANUP
 
 
-AT_SETUP([Numeric operations (8)])
-AT_KEYWORDS([fundamental compute literal])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION   DIVISION.
-       PROGRAM-ID.      prog.
-       DATA             DIVISION.
-       WORKING-STORAGE  SECTION.
-          1 COMPUTE-DATA.
-           2 COMPUTE-8             PICTURE 999       VALUE ZERO.
-       PROCEDURE        DIVISION.
-           COMPUTE COMPUTE-8 = (((24.0 + 1) * (60 - 10)) / 125) ** 2
-           IF COMPUTE-8 NOT = 100
-              DISPLAY 'COMPUTE with wrong result: ' COMPUTE-8
-              END-DISPLAY
-           END-IF
-           COMPUTE COMPUTE-8 = 55 / (1 - 2 + 1)
-              NOT ON SIZE ERROR
-                 DISPLAY 'SIZE ERROR not set from divide by zero!'
-                 END-DISPLAY
-           END-COMPUTE
-           COMPUTE COMPUTE-8 = 0 ** 1
-           IF COMPUTE-8 NOT = 0
-              DISPLAY '0 ** 1 <> 0: ' COMPUTE-8
-              END-DISPLAY
-           END-IF
-           COMPUTE COMPUTE-8 = 55 ** 0
-           IF COMPUTE-8 NOT = 1
-              DISPLAY '55 ** 0 <> 1: ' COMPUTE-8
-              END-DISPLAY
-           END-IF
-           COMPUTE COMPUTE-8 = 1 ** 55
-           IF COMPUTE-8 NOT = 1
-              DISPLAY '11 ** 55 <> 1: ' COMPUTE-8
-              END-DISPLAY
-           END-IF
-           
-           GOBACK.
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [],
-[prog.cob: 14: warning: divide by constant ZERO
-])
-AT_CHECK([./prog], [0], [], [])
-
-AT_CLEANUP
-
-
 # CORRESPONDING
 
 AT_SETUP([ADD CORRESPONDING])
@@ -4084,45 +4043,5 @@ AT_CHECK([$COMPILE prog.cob], [0], [],
 [prog.cob: 20: warning: no CORRESPONDING items found
 ])
 AT_CHECK([./prog], [0], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([SYNC in OCCURS])
-AT_KEYWORDS([fundamental SYNCHRONIZE])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION  DIVISION.
-       PROGRAM-ID.     prog.
-
-       DATA            DIVISION.
-       WORKING-STORAGE SECTION.
-       01 x.
-           03  ptrs                     OCCURS 5 TIMES.
-               05  misalign-1           PIC X.
-               05  ptr                  POINTER, SYNC.
-               05  ptr-num              REDEFINES ptr,
-       >>IF P64 SET
-                                        USAGE BINARY-DOUBLE UNSIGNED.
-       >>ELSE
-                                        USAGE BINARY-LONG UNSIGNED.
-       >>END-IF
-               05  misalign-2           PIC X.
-
-       01  num                          BINARY-LONG.
-
-       PROCEDURE       DIVISION.
-           SET ptr (2) TO ADDRESS OF ptr (2)
-           SET ptr (3) TO ADDRESS OF ptr (3)
-
-           SUBTRACT ptr-num (2) FROM ptr-num (3) GIVING num
-           DISPLAY FUNCTION MOD (num, FUNCTION LENGTH (ptr (1)))
-           .
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([./prog], [0],
-[000000000
-])
 
 AT_CLEANUP

@@ -21,7 +21,7 @@
    along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/* #define DEBUG_REPLACE */
+/*#define DEBUG_REPLACE*/
 
 #include "config.h"
 #include "defaults.h"
@@ -63,13 +63,12 @@
 
 #include "libcob/cobgetopt.h"
 
-#if defined (COB_EXPERIMENTAL) || 1
+#if defined (COB_EXPERIMENTAL)
 #define COB_INTERNAL_XREF
 enum xref_type {
 	XREF_FIELD,
 	XREF_FILE,
-	XREF_LABEL,
-	XREF_FUNCTION
+	XREF_LABEL
 };
 #endif
 
@@ -127,37 +126,30 @@ struct strcache {
 #ifdef	_MSC_VER
 #define	CB_COPT_1	" /O1"
 #define	CB_COPT_2	" /O2"
-#define	CB_COPT_3	" /Ox"
 #define	CB_COPT_S	" /Os"
 #elif   defined(__BORLANDC__)
 #define	CB_COPT_1	" -O"
 #define	CB_COPT_2	" -O2"
-#define	CB_COPT_3	" -O3"
 #define	CB_COPT_S	" -O1"
 #elif defined(__hpux) && !defined(__GNUC__)
 #define	CB_COPT_1	" -O"
 #define	CB_COPT_2	" +O2"
-#define	CB_COPT_3	" +O3"
 #define	CB_COPT_S	" +O2 +Osize"
 #elif   defined(__WATCOMC__)
 #define	CB_COPT_1	" -ot"
 #define	CB_COPT_2	" -ox"
-#define	CB_COPT_3	" -ox -oh"
 #define	CB_COPT_S	" -os"
 #elif   defined(__SUNPRO_C)
 #define	CB_COPT_1	" -xO1"
 #define	CB_COPT_2	" -xO2"
-#define	CB_COPT_3	" -xO2"	/* Oracle docs are confusing, is -xO3 working? */
 #define	CB_COPT_S	" -xO1 -xspace"
 #elif	defined(__xlc__)
 #define	CB_COPT_1	" -O"
 #define	CB_COPT_2	" -O2"
-#define	CB_COPT_2	" -O3"
 #define	CB_COPT_S	" -O"
 #else
 #define	CB_COPT_1	" -O"
 #define	CB_COPT_2	" -O2"
-#define	CB_COPT_3	" -O3"
 #define	CB_COPT_S	" -Os"
 #endif
 
@@ -206,19 +198,17 @@ int	pd_off;
 FILE			*cb_src_list_file = NULL;
 int			cb_listing_page = 0;
 int			cb_listing_wide = 0;
-unsigned int		cb_lines_per_page = CB_MAX_LINES;
-int			cb_listing_symbols = 0;
+int			cb_lines_per_page = CB_MAX_LINES;
+int			cb_no_symbols = 0;
 int			cb_listing_xref = 0;
-#define			CB_LISTING_DATE_BUFF 26
-#define			CB_LISTING_DATE_MAX (CB_LISTING_DATE_BUFF - 1)
+#define		CB_LISTING_DATE_BUFF	48
+#define		CB_LISTING_DATE_MAX		(CB_LISTING_DATE_BUFF - 1)
 char			cb_listing_date[CB_LISTING_DATE_BUFF]; /* Date/Time buffer for listing */
 struct list_files	*cb_current_file = NULL;
-#define			LCL_NAME_LEN 80
-#define			LCL_NAME_MAX (LCL_NAME_LEN - 1)
 
 /* compilation date/time of current source file */
 struct cob_time		current_compile_time = { 0 };
-struct tm		current_compile_tm = { 0 };
+struct tm			current_compile_tm = { 0 };
 
 #if	0	/* RXWRXW - source format */
 char			*source_name = NULL;
@@ -234,14 +224,15 @@ int			cb_field_id = 0;
 int			cobc_flag_main = 0;
 int			cb_flag_main = 0;
 int			cobc_wants_debug = 0;
+int			cobc_wants_anim = 0;
 int			cb_flag_functions_all = 0;
 int			cobc_seen_stdin = 0;
 int			cb_unix_lf = 0;
 
 int			errorcount = 0;
 int			warningcount = 0;
+int			exit_option = 0;
 int			warningopt = 0;
-int			fatal_errors_flag = 0;
 int			no_physical_cancel = 0;
 int			cb_source_line = 0;
 int			cb_saveargc = 0;
@@ -306,13 +297,13 @@ static size_t		cobc_export_dyn_len;
 static size_t		cobc_shared_opt_len;
 static size_t		cobc_pic_flags_len;
 
-static char		*save_temps_dir = NULL;
+static char		*save_temps_dir;
 static struct strcache	*base_string;
 
-static char		*cobc_list_dir = NULL;
-static char		*cobc_list_file = NULL;
+static char		*cobc_list_dir;
+static char		*cobc_list_file;
 
-static char		*output_name = NULL;
+static char		*output_name;
 static char		*cobc_buffer;
 static char		*cobc_objects_buffer;
 static char		*output_name_buff;
@@ -332,22 +323,19 @@ static size_t		wants_nonfinal = 0;
 static size_t		cobc_flag_module = 0;
 static size_t		cobc_flag_library = 0;
 static size_t		cobc_flag_run = 0;
-static char		*cobc_run_args = NULL;
+static char		*cobc_run_args;
 static size_t		save_temps = 0;
 static size_t		save_all_src = 0;
 static size_t		save_c_src = 0;
 static signed int	verbose_output = 0;
 static size_t		cob_optimize = 0;
 
-static unsigned int		cb_listing_linecount;
+static int		cb_listing_linecount;
 static int		cb_listing_eject = 0;
 static char		cb_listing_filename[FILENAME_MAX];
 static char		*cb_listing_outputfile = NULL;
-static char		cb_listing_title[81];	/* Listing title (defaults to PACKAGE_NAME + Version */
-static char		cb_listing_header[133];	/* Listing header */
+static char		cb_listing_title[133];	/* Listing subtitle */
 static struct list_files	*cb_listing_file_struct = NULL;
-static struct list_error	*cb_listing_error_head = NULL;
-static struct list_error	*cb_listing_error_tail = NULL;
 
 #ifdef	_MSC_VER
 static const char	*manicmd;
@@ -458,7 +446,7 @@ static const char	*const cob_csyns[] = {
 
 #define COB_NUM_CSYNS	sizeof(cob_csyns) / sizeof(char *)
 
-static const char short_options[] = "hVivqECScbmxjdFROPgwo:t:T:I:L:l:D:K:k:";
+static const char short_options[] = "hVivqECScbmxjdFROPgwo:t:T:I:L:l:D:K:k:a";
 
 #define	CB_NO_ARG	no_argument
 #define	CB_RQ_ARG	required_argument
@@ -475,14 +463,13 @@ static const struct option long_options[] = {
 	{"list-intrinsics",	CB_NO_ARG, NULL, '6'},
 	{"list-mnemonics",	CB_NO_ARG, NULL, '7'},
 	{"list-system",		CB_NO_ARG, NULL, '8'},
-	{"list-registers",		CB_NO_ARG, NULL, '9'},
-	{"O2",			CB_NO_ARG, NULL, '2'},
-	{"O3",			CB_NO_ARG, NULL, '3'},
+	{"O2",			CB_NO_ARG, NULL, '9'},
 	{"Os",			CB_NO_ARG, NULL, 's'},
 	{"save-temps",		CB_OP_ARG, NULL, '_'},
 	{"std",			CB_RQ_ARG, NULL, '$'},
 	{"conf",		CB_RQ_ARG, NULL, '&'},
 	{"debug",		CB_NO_ARG, NULL, 'd'},
+	{"animate",		CB_NO_ARG, NULL, 'a'},
 	{"ext",			CB_RQ_ARG, NULL, 'e'},
 	{"free",		CB_NO_ARG, &cb_source_format, CB_FORMAT_FREE},
 	{"fixed",		CB_NO_ARG, &cb_source_format, CB_FORMAT_FIXED},
@@ -495,21 +482,20 @@ static const struct option long_options[] = {
 	{"P",			CB_OP_ARG, NULL, 'P'},
 	{"Xref",		CB_NO_ARG, NULL, 'X'},
 	{"Wall",		CB_NO_ARG, NULL, 'W'},
-	{"Werror",		CB_OP_ARG, NULL, 'Y'},
 	{"W",			CB_NO_ARG, NULL, 'Z'},
 	{"tlines", 		CB_RQ_ARG, NULL, '*'},
-	{"tsymbols", 		CB_NO_ARG, &cb_listing_symbols, 1},
+	{"no-symbols", 		CB_NO_ARG, NULL, '@'},
 
 #define	CB_FLAG(var,pdok,name,doc)			\
-	{"f" name,		CB_NO_ARG, &var, 1},	\
-	{"fno-" name,		CB_NO_ARG, &var, 0},
+	{"f"name,		CB_NO_ARG, &var, 1},	\
+	{"fno-"name,		CB_NO_ARG, &var, 0},
 #define	CB_FLAG_ON(var,pdok,name,doc)		\
-	{"f" name,		CB_NO_ARG, &var, 1},	\
-	{"fno-" name,		CB_NO_ARG, &var, 0},
+	{"f"name,		CB_NO_ARG, &var, 1},	\
+	{"fno-"name,		CB_NO_ARG, &var, 0},
 #define	CB_FLAG_RQ(var,pdok,name,def,opt,doc,vdoc,ddoc)		\
-	{"f" name,		CB_RQ_ARG, NULL, opt},
+	{"f"name,		CB_RQ_ARG, NULL, opt},
 #define	CB_FLAG_NQ(pdok,name,opt,doc,vdoc)			\
-	{"f" name,		CB_RQ_ARG, NULL, opt},
+	{"f"name,		CB_RQ_ARG, NULL, opt},
 #include "flag.def"
 #undef	CB_FLAG
 #undef	CB_FLAG_ON
@@ -517,46 +503,38 @@ static const struct option long_options[] = {
 #undef	CB_FLAG_NQ
 
 #define	CB_CONFIG_ANY(type,var,name,doc)	\
-	{"f" name,		CB_RQ_ARG, NULL, '%'},
+	{"f"name,		CB_RQ_ARG, NULL, '%'},
 #define	CB_CONFIG_INT(var,name,min,max,odoc,doc)	\
-	{"f" name,		CB_RQ_ARG, NULL, '%'},
+	{"f"name,		CB_RQ_ARG, NULL, '%'},
 #define	CB_CONFIG_STRING(var,name,doc)		\
-	{"f" name,		CB_RQ_ARG, NULL, '%'},
+	{"f"name,		CB_RQ_ARG, NULL, '%'},
 #define	CB_CONFIG_BOOLEAN(var,name,doc)		\
-	{"f" name,		CB_NO_ARG, &var, 1},	\
-	{"fno-" name,		CB_NO_ARG, &var, 0},
+	{"f"name,		CB_NO_ARG, &var, 1},	\
+	{"fno-"name,		CB_NO_ARG, &var, 0},
 #define	CB_CONFIG_SUPPORT(var,name,doc)		\
-	{"f" name,		CB_RQ_ARG, NULL, '%'},
+	{"f"name,		CB_RQ_ARG, NULL, '%'},
 #include "config.def"
+	{"freserved",	CB_RQ_ARG, NULL, '%'},
+	{"fnot-reserved",	CB_RQ_ARG, NULL, '%'},
 #undef	CB_CONFIG_ANY
 #undef	CB_CONFIG_INT
 #undef	CB_CONFIG_STRING
 #undef	CB_CONFIG_BOOLEAN
 #undef	CB_CONFIG_SUPPORT
-	{"freserved",	CB_RQ_ARG, NULL, '%'},
-	{"fnot-reserved",	CB_RQ_ARG, NULL, '%'},
-	{"fintrinsic-function",	CB_RQ_ARG, NULL, '%'},
-	{"fnot-intrinsic-function",	CB_RQ_ARG, NULL, '%'},
-	{"fsystem-name",	CB_RQ_ARG, NULL, '%'},
-	{"fnot-system-name",	CB_RQ_ARG, NULL, '%'},
-	{"fregister",	CB_RQ_ARG, NULL, '%'},
-	{"fnot-register",	CB_RQ_ARG, NULL, '%'},
 
 #define	CB_WARNDEF(var,name,doc)			\
-	{"W" name,		CB_NO_ARG, &var, 1},	\
-	{"Wno-" name,		CB_NO_ARG, &var, 0},
+	{"W"name,		CB_NO_ARG, &var, 1},	\
+	{"Wno-"name,		CB_NO_ARG, &var, 0},
 #define	CB_ONWARNDEF(var,name,doc)			\
-	{"W" name,		CB_NO_ARG, &var, 1},	\
-	{"Wno-" name,		CB_NO_ARG, &var, 0},
+	{"W"name,		CB_NO_ARG, &var, 1},	\
+	{"Wno-"name,		CB_NO_ARG, &var, 0},
 #define	CB_NOWARNDEF(var,name,doc)			\
-	{"W" name,		CB_NO_ARG, &var, 1},	\
-	{"Wno-" name,		CB_NO_ARG, &var, 0},
+	{"W"name,		CB_NO_ARG, &var, 1},	\
+	{"Wno-"name,		CB_NO_ARG, &var, 0},
 #include "warning.def"
 #undef	CB_WARNDEF
 #undef	CB_ONWARNDEF
 #undef	CB_NOWARNDEF
-	{"Wfatal-errors",	CB_NO_ARG, &fatal_errors_flag, 1},
-	{"Wno-fatal-errors",	CB_NO_ARG, &fatal_errors_flag, 0},
 
 	{NULL,			0, NULL, 0}
 };
@@ -568,14 +546,11 @@ static const struct option long_options[] = {
 
 /* Prototype */
 DECLNORET static void COB_A_NORETURN	cobc_abort_terminate (void);
-static void	free_list_file		(struct list_files *);
-static void	print_program_code	(struct list_files *, int);
-static void	set_standard_title	(void);
+static void	print_program_code		(struct list_files *, int);
 static void	print_program_header	(void);
-static void	print_program_data	(const char *);
+static void	print_program_data		(const char *);
 static void	print_program_trailer	(void);
-static void	print_program_listing	(void);
-static int	process			(const char *);
+static int	process					(const char *);
 
 /* cobc functions */
 
@@ -598,7 +573,7 @@ cobc_free_mem (void)
 		cobc_list_file = NULL;
 	}
 	if (cb_listing_file_struct) {
-		free_list_file (cb_listing_file_struct);
+		cobc_free (cb_listing_file_struct);
 		cb_listing_file_struct = NULL;
 	}
 	if (cobc_run_args) {
@@ -623,7 +598,6 @@ cobc_free_mem (void)
 		cobc_free (repsl);
 	}
 	cobc_mainmem_base = NULL;
-	ppp_clear_lists ();
 }
 
 static const char *
@@ -648,8 +622,6 @@ cobc_enum_explain (const enum cb_tag tag)
 		return "LITERAL";
 	case CB_TAG_DECIMAL:
 		return "DECIMAL";
-	case CB_TAG_DECIMAL_LITERAL:
-		return "DECIMAL_LITERAL";
 	case CB_TAG_FIELD:
 		return "FIELD";
 	case CB_TAG_FILE:
@@ -710,116 +682,6 @@ cobc_enum_explain (const enum cb_tag tag)
 	return "UNKNOWN";
 }
 
-static const char *
-cobc_enum_explain_storage (const enum cb_storage storage)
-{
-	switch (storage) {
-	case CB_STORAGE_CONSTANT:
-		return "Constants";
-	case CB_STORAGE_FILE:
-		return "FILE SECTION";
-	case CB_STORAGE_WORKING:
-		return "WORKING-STORAGE SECTION";
-	case CB_STORAGE_LOCAL:
-		return "LOCAL-STORAGE SECTION";
-	case CB_STORAGE_LINKAGE:
-		return "LINKAGE SECTION";
-	case CB_STORAGE_SCREEN:
-		return "SCREEN SECTION";
-	case CB_STORAGE_REPORT:
-		return "REPORT SECTION";
-	case CB_STORAGE_COMMUNICATION:
-		return "COMMUNICATION SECTION";
-	default:
-		break;
-	}
-	return "UNKNOWN";
-}
-
-static void
-free_error_list (struct list_error *err)
-{
-	struct list_error	*next;
-
-	do {
-		if (err->file) {
-			cobc_free (err->file);
-		}
-		if (err->prefix) {
-			cobc_free (err->prefix);
-		}
-		if (err->msg) {
-			cobc_free (err->msg);
-		}
-
-		next = err->next;
-		cobc_free (err);
-		err = next;
-	} while (err);
-}
-
-static void
-free_replace_list (struct list_replace *replace)
-{
-	struct list_replace	*next;
-
-	do {
-		if (replace->from) {
-			cobc_free (replace->from);
-		}
-		if (replace->to) {
-			cobc_free (replace->to);
-		}
-
-		next = replace->next;
-		cobc_free (replace);
-		replace = next;
-	} while (replace);
-}
-
-static void
-free_list_skip (struct list_skip *skip)
-{
-	struct list_skip	*next;
-
-	do {
-		next = skip->next;
-		cobc_free (skip);
-		skip = next;
-	} while (skip);
-
-}
-
-static void
-free_list_file (struct list_files *list_files_struct)
-{
-	struct list_files	*next;
-
-	do {
-		/* Delete the resources held by the struct. */
-		if (list_files_struct->copy_head) {
-			free_list_file (list_files_struct->copy_head);
-		}
-		if (list_files_struct->err_head) {
-			free_error_list (list_files_struct->err_head);
-		}
-		if (list_files_struct->replace_head) {
-			free_replace_list (list_files_struct->replace_head);
-		}
-		if (list_files_struct->skip_head) {
-			free_list_skip (list_files_struct->skip_head);
-		}
-		if (list_files_struct->name) {
-			cobc_free ((char *) list_files_struct->name);
-		}
-
-		/* Delete the struct itself */
-		next = list_files_struct->next;
-		cobc_free (list_files_struct);
-		list_files_struct = next;
-	} while (list_files_struct);
-}
-
 /* Global functions */
 
 /* Output a formatted message to stderr */
@@ -844,20 +706,17 @@ cobc_too_many_errors (void)
 }
 
 /* Output cobc source/line where an internal error occurs and exit */
-/* LCOV_EXCL_START */
 void
-cobc_abort (const char * filename, const int line_num)
+cobc_abort (const char *filename, const int line_num)
 {
 	cobc_err_msg (_("%s: %d: internal compiler error"), filename, line_num);
 	cobc_err_msg (_("Please report this!"));
 	cobc_abort_terminate ();
 }
-/* LCOV_EXCL_STOP */
 
 /* Output cobc source/line where a tree cast error occurs and exit */
-/* LCOV_EXCL_START */
 void
-cobc_tree_cast_error (const cb_tree x, const char * filename, const int line_num,
+cobc_tree_cast_error (const cb_tree x, const char *filename, const int line_num,
 		      const enum cb_tag tagnum)
 {
 	cobc_err_msg (_("%s: %d: invalid cast from '%s' type %s to type %s"),
@@ -867,12 +726,10 @@ cobc_tree_cast_error (const cb_tree x, const char * filename, const int line_num
 		cobc_enum_explain (tagnum));
 	cobc_abort_terminate ();
 }
-/* LCOV_EXCL_STOP */
 
 #if	!defined(__GNUC__) && defined(COB_TREE_DEBUG)
-/* LCOV_EXCL_START */
 cb_tree
-cobc_tree_cast_check (const cb_tree x, const char * file,
+cobc_tree_cast_check (const cb_tree x, const char *file,
 		      const int line, const enum cb_tag tag)
 {
 	if (!x || x == cb_error_node || CB_TREE_TAG (x) != tag) {
@@ -880,7 +737,6 @@ cobc_tree_cast_check (const cb_tree x, const char * file,
 	}
 	return x;
 }
-/* LCOV_EXCL_STOP */
 #endif
 
 void *
@@ -890,11 +746,9 @@ cobc_malloc (const size_t size)
 
 	mptr = calloc ((size_t)1, size);
 	if (unlikely(!mptr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	return mptr;
 }
@@ -902,12 +756,12 @@ cobc_malloc (const size_t size)
 void
 cobc_free (void * mptr)
 {
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!mptr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_free");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	free(mptr);
 }
 
@@ -919,10 +773,8 @@ cobc_strdup (const char *dupstr)
 
 #ifdef	COB_TREE_DEBUG
 	if (unlikely(!dupstr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_strdup");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 #endif
 	n = strlen (dupstr);
@@ -938,11 +790,9 @@ cobc_realloc (void *prevptr, const size_t size)
 
 	mptr = realloc (prevptr, size);
 	if (unlikely(!mptr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot reallocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	return mptr;
 }
@@ -955,14 +805,12 @@ cobc_main_malloc (const size_t size)
 
 	m = calloc ((size_t)1, sizeof(struct cobc_mem_struct) + size);
 	if (unlikely(!m)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	m->next = cobc_mainmem_base;
-	m->memptr = (char *)m + sizeof (struct cobc_mem_struct);
+	m->memptr = (char *)m + sizeof(struct cobc_mem_struct);
 	m->memlen = size;
 	cobc_mainmem_base = m;
 	return m->memptr;
@@ -974,12 +822,12 @@ cobc_main_strdup (const char *dupstr)
 	void	*p;
 	size_t	n;
 
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!dupstr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_main_strdup");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	n = strlen (dupstr);
 	p = cobc_main_malloc (n + 1);
 	memcpy (p, dupstr, n);
@@ -995,13 +843,11 @@ cobc_main_realloc (void *prevptr, const size_t size)
 
 	m = calloc ((size_t)1, sizeof(struct cobc_mem_struct) + size);
 	if (unlikely(!m)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
-	m->memptr = (char *)m + sizeof (struct cobc_mem_struct);
+	m->memptr = (char *)m + sizeof(struct cobc_mem_struct);
 	m->memlen = size;
 
 	prev = NULL;
@@ -1012,10 +858,8 @@ cobc_main_realloc (void *prevptr, const size_t size)
 		prev = curr;
 	}
 	if (unlikely(!curr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("attempt to reallocate non-allocated memory"));
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	m->next = curr->next;
 	if (prev) {
@@ -1044,7 +888,6 @@ cobc_main_free (void *prevptr)
 		prev = curr;
 	}
 	if (unlikely(!curr)) {
-		/* LCOV_EXCL_START */
 #ifdef	COB_TREE_DEBUG
 		cobc_err_msg (_("call to %s with invalid pointer, as it is missing in list"),
 			"cobc_main_free");
@@ -1052,7 +895,6 @@ cobc_main_free (void *prevptr)
 #else
 		return;
 #endif
-		/* LCOV_EXCL_STOP */
 	}
 	if (prev) {
 		prev->next = curr->next;
@@ -1071,11 +913,9 @@ cobc_parse_malloc (const size_t size)
 
 	m = calloc ((size_t)1, sizeof(struct cobc_mem_struct) + size);
 	if (unlikely(!m)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	m->next = cobc_parsemem_base;
 	m->memptr = (char *)m + sizeof(struct cobc_mem_struct);
@@ -1090,12 +930,12 @@ cobc_parse_strdup (const char *dupstr)
 	void	*p;
 	size_t	n;
 
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!dupstr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_parse_strdup");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	n = strlen (dupstr);
 	p = cobc_parse_malloc (n + 1);
 	memcpy (p, dupstr, n);
@@ -1111,11 +951,9 @@ cobc_parse_realloc (void *prevptr, const size_t size)
 
 	m = calloc ((size_t)1, sizeof(struct cobc_mem_struct) + size);
 	if (unlikely(!m)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	m->memptr = (char *)m + sizeof(struct cobc_mem_struct);
 	m->memlen = size;
@@ -1128,10 +966,8 @@ cobc_parse_realloc (void *prevptr, const size_t size)
 		prev = curr;
 	}
 	if (unlikely(!curr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("attempt to reallocate non-allocated memory"));
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
 	m->next = curr->next;
 	if (prev) {
@@ -1160,7 +996,6 @@ cobc_parse_free (void *prevptr)
 		prev = curr;
 	}
 	if (unlikely(!curr)) {
-		/* LCOV_EXCL_START */
 #ifdef	COB_TREE_DEBUG
 		cobc_err_msg (_("call to %s with invalid pointer, as it is missing in list"),
 			"cobc_parse_free");
@@ -1168,7 +1003,6 @@ cobc_parse_free (void *prevptr)
 #else
 		return;
 #endif
-		/* LCOV_EXCL_STOP */
 	}
 	if (prev) {
 		prev->next = curr->next;
@@ -1187,13 +1021,11 @@ cobc_plex_malloc (const size_t size)
 
 	m = calloc ((size_t)1, sizeof(struct cobc_mem_struct) + size);
 	if (unlikely(!m)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("cannot allocate %d bytes of memory"),
 				(int)size);
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
-	m->memptr = (char *)m + sizeof (struct cobc_mem_struct);
+	m->memptr = (char *)m + sizeof(struct cobc_mem_struct);
 	m->next = cobc_plexmem_base;
 	cobc_plexmem_base = m;
 	return m->memptr;
@@ -1205,12 +1037,12 @@ cobc_plex_strdup (const char *dupstr)
 	void	*p;
 	size_t	n;
 
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!dupstr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_plex_strdup");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	n = strlen (dupstr);
 	p = cobc_plex_malloc (n + 1);
 	memcpy (p, dupstr, n);
@@ -1222,12 +1054,12 @@ cobc_check_string (const char *dupstr)
 {
 	struct strcache	*s;
 
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!dupstr)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_check_string");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	for (s = base_string; s; s = s->next) {
 		if (!strcmp (dupstr, (const char *)s->val)) {
 			return s->val;
@@ -1331,7 +1163,7 @@ cobc_set_value (struct cb_define_struct *p, const char *value)
 	if (*s || size <= (dot_seen + sign_seen)) {
 		/* Not numeric */
 #if	0	/* RXWRXW - Lit warn */
-		cb_warning (COBC_WARN_FILLER, _("assuming literal for unquoted '%s'"),
+		cb_warning (_("assuming literal for unquoted '%s'"),
 				value);
 #endif
 		size = strlen (value);
@@ -1395,11 +1227,11 @@ cobc_error_name (const char *name, const enum cobc_name_type type,
 		s = "";
 		break;
 	}
-
+	
 	switch (type) {
 	case FILE_BASE_NAME:
 		cobc_err_msg (_("invalid file base name '%s'%s"),
-			name, s);
+			      name, s);
 		break;
 	case ENTRY_NAME:
 		cb_error (_("invalid ENTRY '%s'%s"), name, s);
@@ -1408,11 +1240,9 @@ cobc_error_name (const char *name, const enum cobc_name_type type,
 		cb_error (_("invalid PROGRAM-ID '%s'%s"), name, s);
 		break;
 	default:
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("unknown name error '%s'%s"),
-			name, s);
+			      name, s);
 		break;
-		/* LCOV_EXCL_STOP */
 	}
 }
 
@@ -1440,7 +1270,7 @@ cobc_check_valid_name (const char *name, const enum cobc_name_type prechk)
 		cobc_error_name (name, prechk, INVALID_LENGTH);
 		return 1;
 	}
-
+	
 	if (*name == '_' || *name == ' ') {
 		cobc_error_name (name, prechk, SPACE_UNDERSCORE_FIRST_CHAR);
 		return 1;
@@ -1453,14 +1283,14 @@ cobc_check_valid_name (const char *name, const enum cobc_name_type prechk)
 		cobc_error_name (name, prechk, GNUCOBOL_PREFIX);
 		return 1;
 	}
-
+	
 	/* Check name is not a C keyword. */
 	if (bsearch (name, cob_csyns, COB_NUM_CSYNS,
 		     sizeof (char *), cobc_bcompare)) {
 		cobc_error_name (name, prechk, C_KEYWORD);
 		return 1;
 	}
-
+	
 	return 0;
 }
 
@@ -1546,7 +1376,7 @@ cb_define_list_add (struct cb_define_struct *list, const char *text)
 	/* Check duplicate */
 	for (l = list; l; l = l->next) {
 		if (!strcasecmp (s, l->name)) {
-			cobc_err_msg (_("duplicate DEFINE '%s' - ignored"), s);
+			cobc_err_msg (_("duplicate define '%s' - ignored"), s);
 			cobc_free (x);
 			return list;
 		}
@@ -1579,12 +1409,12 @@ cobc_stradd_dup (const char *str1, const char *str2)
 	char	*p;
 	size_t	m, n;
 
+#ifdef	COB_TREE_DEBUG
 	if (unlikely(!str1 || !str2)) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to %s with NULL pointer"), "cobc_stradd_dup");
 		cobc_abort_terminate ();
-		/* LCOV_EXCL_STOP */
 	}
+#endif
 	m = strlen (str1);
 	n = strlen (str2);
 	p = cobc_main_malloc (m + n + 1);
@@ -1644,9 +1474,7 @@ cobc_add_str (char **var, size_t *cursize, const char *s1, const char *s2,
 	}
 	if (calcsize >= 131072) {
 		/* Arbitrary limit */
-		/* LCOV_EXCL_START */
 		cobc_err_exit (_("parameter buffer size exceeded"));
-		/* LCOV_EXCL_STOP */
 	}
 	if (calcsize >= *cursize) {
 		while (*cursize <= calcsize) {
@@ -1682,10 +1510,8 @@ cobc_check_action (const char *name)
 		/* Remove possible target file - ignore return */
 		(void)unlink (temp_buff);
 		if (rename (name, temp_buff)) {
-			/* LCOV_EXCL_START */
 			cobc_err_msg (_("warning: could not move temporary file to %s"),
 					temp_buff);
-			/* LCOV_EXCL_STOP */
 		}
 	}
 }
@@ -1787,7 +1613,6 @@ cobc_clean_up (const int status)
 static void
 set_listing_date (void)
 {
-	char	*time_buff;
 	if (!current_compile_time.year) {
 		current_compile_time = cob_get_current_date_and_time();
 	}
@@ -1806,15 +1631,8 @@ set_listing_date (void)
 	}
 	current_compile_tm.tm_yday = current_compile_time.day_of_year;
 	current_compile_tm.tm_isdst = current_compile_time.is_daylight_saving_time;
-	time_buff = asctime (&current_compile_tm);
-	if (!time_buff) {
-		/* LCOV_EXCL_START */
-		strncpy (cb_listing_date, "DATE BUG, PLEASE REPORT", CB_LISTING_DATE_MAX);
-		return;
-		/* LCOV_EXCL_STOP */
-	}
-	*strchr (time_buff, '\n') = '\0';
-	strncpy (cb_listing_date, time_buff, CB_LISTING_DATE_MAX);
+	strcpy (cb_listing_date, asctime(&current_compile_tm));
+	*strchr (cb_listing_date, '\n') = '\0';
 }
 
 
@@ -1823,7 +1641,6 @@ cobc_terminate (const char *str)
 {
 	if (cb_src_list_file) {
 		set_listing_date ();
-		set_standard_title ();
 		cb_listing_linecount = cb_lines_per_page;
 		strcpy (cb_listing_filename, str);
 		print_program_header ();
@@ -1840,29 +1657,19 @@ static void
 cobc_abort_msg (void)
 {
 	char *prog_id;
-	const char *prog_type;
 
 	if (cb_source_file) {
-		if (current_program) {
-			if (current_program->prog_type == CB_FUNCTION_TYPE) {
-				prog_type = "FUNCTION-ID";
-			} else {
-				prog_type = "PROGRAM-ID";
-			}
-			if (current_program->program_id) {
-				prog_id = (char *)current_program->program_id;
-			} else {
-				prog_id = (char *)_("unknown");
-			}
+		if (current_program && current_program->program_id) {
+			prog_id = (char *)current_program->program_id;
 		} else {
-			prog_type = prog_id = (char *)_("unknown");
+			prog_id = _("unknown");
 		}
 		if (!cb_source_line) {
-			cobc_err_msg (_("aborting codegen for %s (%s: %s)"),
-				cb_source_file, prog_type, prog_id);
+			cobc_err_msg (_("aborting codegen for %s (PROGRAM-ID: %s)"),
+				cb_source_file, prog_id);
 		} else {
-			cobc_err_msg (_("aborting compile of %s at line %d (%s: %s)"),
-				cb_source_file, cb_source_line, prog_type, prog_id);
+			cobc_err_msg (_("aborting compile of %s at line %d (PROGRAM-ID: %s)"),
+				cb_source_file, cb_source_line, prog_id);
 		}
 	} else {
 		cobc_err_msg (_("aborting"));
@@ -1872,27 +1679,20 @@ cobc_abort_msg (void)
 DECLNORET static void COB_A_NORETURN
 cobc_abort_terminate (void)
 {
-	/* note we returned 99 for aborts earlier but autotest will
-	   "recognize" status 99 as failure (you cannot "expect" the return 99 */
-	const int ret_code = 97;
-
-	if (cb_src_list_file) {
-		print_program_listing ();
-	}
 	cobc_abort_msg ();
-	cobc_clean_up (ret_code);
-	exit (ret_code);
+	cobc_clean_up (99);
+	exit (99);
 }
 
 static void
 cobc_sig_handler (int sig)
 {
-#if defined (SIGINT) ||defined (SIGQUIT) || defined (SIGTERM) || defined (SIGPIPE)
+#if defined (SIGINT) ||defined (SIGQUIT) || defined (SIGTERM)
 	int ret = 0;
 #endif
 
 	cobc_abort_msg ();
-#if defined (SIGINT) ||defined (SIGQUIT) || defined (SIGTERM) || defined (SIGPIPE)
+#if defined (SIGINT) ||defined (SIGQUIT) || defined (SIGTERM)
 #ifdef SIGINT
 	if (sig == SIGINT) ret = 1;
 #endif
@@ -1902,11 +1702,8 @@ cobc_sig_handler (int sig)
 #ifdef SIGTERM
 	if (sig == SIGTERM) ret = 1;
 #endif
-#ifdef SIGPIPE
-	if (sig == SIGPIPE) ret = 1;
-#endif
 	if (!ret) {
-		cobc_err_msg (_("Please report this!"));	/* LCOV_EXCL_LINE */
+		cobc_err_msg (_("Please report this!"));
 	}
 #else
 	COB_UNUSED (sig);
@@ -1922,7 +1719,7 @@ cobc_print_version (void)
 {
 	printf ("cobc (%s) %s.%d\n",
 		PACKAGE_NAME, PACKAGE_VERSION, PATCH_LEVEL);
-	puts ("Copyright (C) 2017 Free Software Foundation, Inc.");
+	puts ("Copyright (C) 2016 Free Software Foundation, Inc.");
 	puts (_("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>"));
 	puts (_("This is free software; see the source for copying conditions.  There is NO\n"
 	        "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."));
@@ -2144,17 +1941,15 @@ cobc_print_warn (const char *name, const char *doc, const int warnopt)
 		break;
 	case 2:
 		printf ("  -Wno-%-16s\t%s\n", name, doc);
-		fputs ("\t\t\t", stdout);
+		fputs ("\t\t\t", stdout);	
 		fputs (_("- ALWAYS active"), stdout);
 		putchar ('\n');
 		break;
 	default:
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to '%s' with invalid parameter '%s'"),
 			"cobc_print_warn", "warnopt");
 		COBC_ABORT ();
 		break;
-		/* LCOV_EXCL_STOP */
 	}
 }
 
@@ -2191,8 +1986,7 @@ cobc_print_usage (char * prog)
 	puts (_("Options:"));
 	puts (_("  -h, -help             display this help and exit"));
 	puts (_("  -V, -version          display compiler version and exit"));
-	puts (_("  -i, -info             display compiler information (build/environment)\n" \
-	        "                        and exit"));
+	puts (_("  -i, -info             display compiler information (build/environment)"));
 	puts (_("  -v, -verbose          display compiler version and the commands\n" \
 	        "                        invoked by the compiler"));
 	puts (_("  -vv, -verbose=2       like -v but additional pass verbose option\n" \
@@ -2206,16 +2000,15 @@ cobc_print_usage (char * prog)
 	puts (_("  -j [<args>], -job[=<args>]\trun program after build, passing <args>"));
 	puts (_("  -std=<dialect>        warnings/features for a specific dialect\n"
 			"                        <dialect> can be one of:\n"
-			"                        default, cobol2014, cobol2002, cobol85, xopen,\n"
-			"                        ibm-strict, ibm, mvs-strict, mvs,\n"
-			"                        mf-strict, mf, bs2000-strict, bs2000,\n"
-			"                        acu-strict, acu, rm-strict, rm;\n"
+			"                        cobol2014, cobol2002, cobol85, default,\n"
+			"                        ibm, mvs, bs2000, mf, acu;\n"
 			"                        see configuration files in directory config"));
 	puts (_("  -F, -free             use free source format"));
 	puts (_("  -fixed                use fixed source format (default)"));
-	puts (_("  -O, -O2, -O3, -Os     enable optimization"));
+	puts (_("  -O, -O2, -Os          enable optimization"));
 	puts (_("  -g                    enable C compiler debug / stack check / trace"));
 	puts (_("  -d, -debug            enable all run-time error checking"));
+	puts (_("  -a, -animate          prepare program for being animated"));
 	puts (_("  -o <file>             place the output into <file>"));
 	puts (_("  -b                    combine all input files into a single\n"
 			"                        dynamically loadable module"));
@@ -2226,7 +2019,7 @@ cobc_print_usage (char * prog)
 	puts (_("  -T <file>             generate and place a wide program listing into <file>"));
 	puts (_("  -t <file>             generate and place a program listing into <file>"));
 	puts (_("  --tlines=<lines>      specify lines per page in listing, default = 55"));
-	puts (_("  --tsymbols            specify symbols in listing"));
+	puts (_("  --no-symbols          specify no symbols in listing"));
 	puts (_("  -P[=<dir or file>]    generate preprocessed program listing (.lst)"));
 #ifndef COB_INTERNAL_XREF
 	puts (_("  -Xref                 generate cross reference through 'cobxref'\n"
@@ -2265,8 +2058,6 @@ cobc_print_usage (char * prog)
 #undef	CB_WARNDEF
 #undef	CB_ONWARNDEF
 #undef	CB_NOWARNDEF
-	puts (_("  -Werror               treat all warnings as errors"));
-	puts (_("  -Werror=<warning>     treat specified <warning> as error"));
 
 	putchar ('\n');
 
@@ -2303,9 +2094,8 @@ cobc_print_usage (char * prog)
 #undef	CB_CONFIG_BOOLEAN
 #undef	CB_CONFIG_SUPPORT
 	putchar ('\t');
-	puts (_("where <support> is one of the following:"));
-	puts ("\t'ok', 'warning', 'archaic', 'obsolete', 'skip', 'ignore', 'error', 'unconformable'");
-	putchar ('\t');
+	puts(_("where <support> is one of the following:"));
+	puts("\t'ok', 'warning', 'archaic', 'obsolete', 'skip', 'ignore', 'error', 'unconformable'");
 	cobc_print_flag ("not-reserved", _("word to be taken out of the reserved words list"), 1, _("<word>"), NULL);
 	cobc_print_flag ("reserved", _("word to be added to reserved words list"), 1, _("<word>"), NULL);
 	cobc_print_flag ("reserved", _("word to be added to reserved words list as alias"), 1, _("<word>:<alias>"), NULL);
@@ -2313,7 +2103,7 @@ cobc_print_usage (char * prog)
 	putchar ('\n');
 
 	putchar ('\n');
-	printf (_("Report bugs to: %s\n"
+	printf (_("Report bugs to: %s\n" 
 			  "or (preferably) use the issue tracker via the home page."), "bug-gnucobol@gnu.org");
 	putchar ('\n');
 	puts (_("GnuCOBOL home page: <http://www.gnu.org/software/gnucobol/>"));
@@ -2363,23 +2153,17 @@ process_command_line (const int argc, char **argv)
 	int			c;
 	int			idx;
 	int			n;
-	int			exit_option = 0;
 	int			list_reserved = 0;
-	int			list_registers = 0;
-	int			list_intrinsics = 0;
-	int			list_system_names = 0;
-	int			list_system_routines = 0;
 #ifdef _WIN32
 	int 			argnum;
 #endif
 	enum cob_exception_id	i;
 	struct stat		st;
 	char			ext[COB_MINI_BUFF];
-	char			*conf_label;	/* we want a dynamic address for erroc.c, not a static one */
+	char			*conf_label;	/* we want a dynamic address for erroc.c, not a  static one */
 	char			*conf_entry;
 
 	int			conf_ret = 0;
-	int			error_all_warnings = 0;
 
 #ifdef _WIN32
 	/* Translate command line arguments from WIN to UNIX style */
@@ -2442,39 +2226,34 @@ process_command_line (const int argc, char **argv)
 		case 'i':
 			/* --info */
 			cobc_print_info ();
-			exit (0);
+			exit_option = 1;
+			break;
 
-		/*
-			The following list options are postponed until
-			until the configuration and exceptions are processed.
-		*/
 		case '5':
 			/* --list-reserved */
+			/*
+			  This must be postponed until after the configuration
+			  is loaded.
+			*/
 			list_reserved = 1;
 			exit_option = 1;
 			break;
 
 		case '6':
 			/* --list-intrinsics */
-			list_intrinsics = 1;
+			cb_list_intrinsics ();
 			exit_option = 1;
 			break;
 
 		case '7':
 			/* --list-mnemonics */
-			list_system_names = 1;
+			cb_list_mnemonics ();
 			exit_option = 1;
 			break;
 
 		case '8':
 			/* --list-system */
-			list_system_routines = 1;
-			exit_option = 1;
-			break;
-
-		case '9':
-			/* --list-registers */
-			list_system_names = 1;
+			cb_list_system ();
 			exit_option = 1;
 			break;
 
@@ -2518,24 +2297,34 @@ process_command_line (const int argc, char **argv)
 
 		case '$':
 			/* -std=<xx> : Specify dialect */
-			snprintf (ext, (size_t)COB_MINI_MAX, "%s.conf", cob_optarg);
-			if (cb_load_std (ext) != 0) {
-				cobc_err_exit (_("invalid parameter -std=%s"), cob_optarg);
+			if (!exit_option) {
+				snprintf (ext, (size_t)COB_MINI_MAX, "%s.conf", cob_optarg);
+				if (cb_load_std (ext) != 0) {
+					cobc_err_exit (_("invalid parameter -std=%s"), cob_optarg);
+				}
 			}
 			break;
 
 		case '&':
 			/* -conf=<xx> : Specify dialect configuration file */
-			if (strlen (cob_optarg) > COB_SMALL_MAX) {
-				cobc_err_exit (COBC_INV_PAR, "-conf");
+			if (!exit_option) {
+				if (strlen (cob_optarg) > COB_SMALL_MAX) {
+					cobc_err_exit (COBC_INV_PAR, "-conf");
+				}
+				conf_ret |= cb_load_conf (cob_optarg, 0);
 			}
-			conf_ret |= cb_load_conf (cob_optarg, 0);
 			break;
 
 		default:
 			/* as we postpone most options simply skip everything other here */
 			break;
 		}
+	}
+
+	/* Exit if list options were specified */
+	if (exit_option && !list_reserved) {
+		cobc_free_mem ();
+		exit (0);
 	}
 
 	/* Load default configuration file if necessary */
@@ -2575,8 +2364,6 @@ process_command_line (const int argc, char **argv)
 			/* --list-mnemonics */
 		case '8':
 			/* --list-system */
-		case '9':
-			/* --list-registers */
 			/* These options were all processed in the first getopt-run */
 			break;
 
@@ -2640,6 +2427,10 @@ process_command_line (const int argc, char **argv)
 			if (cobc_flag_module || cobc_flag_library) {
 				cobc_options_error_build ();
 			}
+			/* temporary error - needs a generated callback to fix, see codegen */
+			if (cobc_wants_anim) {
+				cobc_err_exit (_("'-anim' currently doesn't work with '-x'"));
+			}
 			cobc_flag_main = 1;
 			cb_flag_main = 1;
 			no_physical_cancel = 1;
@@ -2649,9 +2440,6 @@ process_command_line (const int argc, char **argv)
 			/* -j : Run job; compile, link and go, either by ./ or cobcrun */
 			/* allows optional arguments, passed to program */
 			cobc_flag_run = 1;
-			if (cobc_run_args) {
-				cobc_free (cobc_run_args);
-			}
 			if (cob_optarg) {
 				cobc_run_args = cobc_strdup (cob_optarg);
 			}
@@ -2677,10 +2465,6 @@ process_command_line (const int argc, char **argv)
 			if (osize > COB_SMALL_MAX) {
 				cobc_err_exit (_("invalid output file name"));
 			}
-			if (output_name) {
-				cobc_main_free (output_name);
-				cobc_main_free (output_name_buff);
-			}
 			output_name = cobc_main_strdup (cob_optarg);
 			/* Allocate buffer plus extension reserve */
 			output_name_buff = cobc_main_malloc (osize + 32U);
@@ -2692,18 +2476,11 @@ process_command_line (const int argc, char **argv)
 			COBC_ADD_STR (cobc_cflags, CB_COPT_1, NULL, NULL);
 			break;
 
-		case '2':
+		case '9':
 			/* -O2 : Optimize */
 			cob_optimize = 1;
 			strip_output = 1;
 			COBC_ADD_STR (cobc_cflags, CB_COPT_2, NULL, NULL);
-			break;
-
-		case '3':
-			/* -O3 : Optimize */
-			cob_optimize = 1;
-			strip_output = 1;
-			COBC_ADD_STR (cobc_cflags, CB_COPT_3, NULL, NULL);
 			break;
 
 		case 's':
@@ -2723,6 +2500,16 @@ process_command_line (const int argc, char **argv)
 			COBC_ADD_STR (cobc_cflags, " -g", NULL, NULL);
 #endif
 			break;
+
+/* EB START */
+		case 'a':
+			/* temporary error - needs a generated callback to fix, see codegen */
+			if (cobc_flag_main) {
+				cobc_err_exit (_("'-anim' currently doesn't work with '-x'"));
+			}
+			cobc_wants_anim = 1;
+			break;
+/* EB END */
 
 		case '$':
 			/* -std=<xx> : Specify dialect */
@@ -2760,9 +2547,6 @@ process_command_line (const int argc, char **argv)
 					cobc_err_msg (_("warning: '%s' is not a directory, defaulting to current directory"),
 						cob_optarg);
 				} else {
-					if (save_temps_dir) {
-						cobc_free (save_temps_dir);
-					}
 					save_temps_dir = cobc_strdup (cob_optarg);
 				}
 			}
@@ -2778,27 +2562,22 @@ process_command_line (const int argc, char **argv)
 			if (cb_listing_outputfile) {
 				cobc_main_free (cb_listing_outputfile);
 			}
-			/* FIXME: add option to place each source in a single listing 
-			          by specifying a directory (similar to -P) */
 			cb_listing_outputfile = cobc_main_strdup (cob_optarg);
 			break;
 
 		case '*':
 			/* --tlines=nn : Lines per page */
-			cb_lines_per_page = atoi (cob_optarg);
+			cb_lines_per_page = atoi(cob_optarg);
+			break;
+
+		case '@':
+			/* --no-symbols : No symbols in listing */
+			cb_no_symbols = 1;
 			break;
 
 		case 'P':
 			/* -P : Generate preproc listing */
 			if (cob_optarg) {
-				if (cobc_list_dir) {
-					cobc_free (cobc_list_dir);
-					cobc_list_dir = NULL;
-				}
-				if (cobc_list_file) {
-					cobc_free (cobc_list_file);
-					cobc_list_file = NULL;
-				}
 				if (!stat (cob_optarg, &st) && S_ISDIR (st.st_mode)) {
 					cobc_list_dir = cobc_strdup (cob_optarg);
 				} else {
@@ -2816,7 +2595,8 @@ process_command_line (const int argc, char **argv)
 			cobc_gen_listing = 2;
 			/* temporary: check if we run the testsuite and skip
 			   the run if we don't have the internal xref */
-			if (getenv ("COB_IS_RUNNING_IN_TESTMODE")) {
+			cb_listing_outputfile = getenv ("COB_IS_RUNNING_IN_TESTMODE");
+			if (cb_listing_outputfile) {
 				cobc_free_mem ();
 				exit (77);
 			}
@@ -2977,15 +2757,6 @@ process_command_line (const int argc, char **argv)
 			cb_default_byte = n;
 			break;
 
-		case 7:
-			/* -fmax-errors=<xx> : maximum errors until abort */
-			n = cobc_deciph_optarg (cob_optarg, 0);
-			if (n < 0 || n > 99999) {
-				cobc_err_exit (COBC_INV_PAR, "-max-errors");
-			}
-			cb_max_errors = n;
-			break;
-
 		case 10:
 			/* -fintrinsics=<xx> : Intrinsic name or ALL */
 			cobc_deciph_funcs (cob_optarg);
@@ -3026,31 +2797,6 @@ process_command_line (const int argc, char **argv)
 #undef	CB_NOWARNDEF
 			break;
 
-		case 'Y':
-			/* -Werror[=warning] : Treat all/single warnings as errors */
-			if (cob_optarg) {
-				if (0) {} // dummy place holder
-#define CB_CHECK_WARNING(var,name)  \
-				else if (strcmp(cob_optarg,name) == 0) {	\
-					var = COBC_WARN_AS_ERROR;		\
-				}
-#define	CB_WARNDEF(var,name,doc)	CB_CHECK_WARNING(var,name)
-#define	CB_ONWARNDEF(var,name,doc)	CB_CHECK_WARNING(var,name)
-#define	CB_NOWARNDEF(var,name,doc)	CB_CHECK_WARNING(var,name)
-#include "warning.def"
-#undef	CB_CHECK_WARNING
-#undef	CB_WARNDEF
-#undef	CB_ONWARNDEF
-#undef	CB_NOWARNDEF
-				else if (verbose_output) {
-					cobc_err_msg (_("unknown warning option '%s'"),
-						cob_optarg);
-				}
-			} else {
-				error_all_warnings = 1;
-			}
-			break;
-
 		case 'Z':
 			/* -W : Turn on every warning */
 			warningopt = 1;
@@ -3067,11 +2813,6 @@ process_command_line (const int argc, char **argv)
 			cobc_err_exit (_("invalid option detected"));
 		}
 	}
-	
-	/* Load reserved words from fixed word-list if specified */
-	if (cb_reserved_words != NULL) {
-		cb_load_words();
-	}
 
 	/* Exit for configuration errors resulting from -f<conf-tag>[=<value>] */
 	if (conf_ret != 0) {
@@ -3080,7 +2821,7 @@ process_command_line (const int argc, char **argv)
 	}
 
 	/* Set relaxed syntax configuration options if requested */
-	/* part 1: relaxed syntax compiler configuration option */
+	/* part 1: relaxed syntax compiler configuration option */ 
 	if (cb_relaxed_syntax_checks) {
 		if (cb_reference_out_of_declaratives > CB_WARNING) {
 			cb_reference_out_of_declaratives = CB_WARNING;
@@ -3090,7 +2831,7 @@ process_command_line (const int argc, char **argv)
 	}
 #if 0 /* deactivated as -frelaxed-syntax-checks and other compiler configurations
 		 are available at command line - maybe re-add with another name */
-	/* 2: relaxed syntax group option from command line */
+	/* 2: relaxed syntax group option from command line */ 
 	if (cb_flag_relaxed_syntax_group) {
 		cb_relaxed_syntax_checks = 1;
 		cb_larger_redefines_ok = 1;
@@ -3100,50 +2841,13 @@ process_command_line (const int argc, char **argv)
 #endif
 
 	if (list_reserved) {
-		/* includes register listing */
 		cb_list_reserved ();
-	} else if (list_registers) {
-		cb_list_registers ();
-	}
-	if (list_intrinsics) {
-		cb_list_intrinsics ();
-	}
-	if (list_system_names) {
-		cb_list_system_names ();
-	}
-	if (list_system_routines) {
-		cb_list_system_routines ();
 	}
 
 	/* Exit if list options were specified */
 	if (exit_option) {
 		cobc_free_mem ();
 		exit (0);
-	}
-
-	/* Set active warnings to errors, if requested */
-	if (error_all_warnings) {
-#define CB_CHECK_WARNING(var)  \
-		if (var == COBC_WARN_ENABLED) {	\
-				var = COBC_WARN_AS_ERROR;		\
-		}
-#define	CB_WARNDEF(var,name,doc)	CB_CHECK_WARNING(var)
-#define	CB_ONWARNDEF(var,name,doc)	CB_CHECK_WARNING(var)
-#define	CB_NOWARNDEF(var,name,doc)	CB_CHECK_WARNING(var)
-#include "warning.def"
-#undef	CB_CHECK_WARNING
-#undef	CB_WARNDEF
-#undef	CB_ONWARNDEF
-#undef	CB_NOWARNDEF
-	}
-	if (fatal_errors_flag) {
-		cb_max_errors = 0;
-	}
-
-	/* Set implied options */
-	if (cb_title_statement <= CB_OBSOLETE
-	&&  cb_listing_statements > CB_OBSOLETE) {
-		cb_listing_statements = cb_title_statement;
 	}
 
 	/* debug: Turn on all exception conditions */
@@ -3241,11 +2945,9 @@ file_basename (const char *filename)
 	size_t		len;
 
 	if (!filename) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("call to '%s' with invalid parameter '%s'"),
 			"file_basename", "filename");
 		COBC_ABORT ();
-		/* LCOV_EXCL_STOP */
 	}
 
 	/* Remove directory name */
@@ -3273,8 +2975,8 @@ file_basename (const char *filename)
 		basename_len = len + 16;
 		basename_buffer = cobc_main_realloc (basename_buffer, basename_len);
 	}
-	/* Copy base name (possiby done before -> memmove) */
-	memmove (basename_buffer, startp, len);
+	/* Copy base name */
+	memcpy (basename_buffer, startp, len);
 	basename_buffer[len] = 0;
 	return basename_buffer;
 }
@@ -3317,10 +3019,8 @@ process_filename (const char *filename)
 
 	fsize = strlen (filename);
 	if (fsize > COB_NORMAL_MAX) {
-		/* LCOV_EXCL_START */
 		cobc_err_msg (_("invalid file name parameter (length > %d)"), COB_NORMAL_MAX);
 		return NULL;
-		/* LCOV_EXCL_STOP */
 	}
 
 #ifdef	__OS400__
@@ -3372,6 +3072,7 @@ process_filename (const char *filename)
 		/* Already compiled */
 		fn->need_preprocess = 0;
 		fn->need_translate = 0;
+		cobc_wants_anim = 0; /* Ignore -a option for C-Sources */
 	} else if (
 #if	defined(__OS400__)
 			extension[0] == 0
@@ -3457,10 +3158,8 @@ process_filename (const char *filename)
 			fn->listing_file = cobc_stradd_dup (fbasename, ".lst");
 		}
 #ifndef COB_INTERNAL_XREF
-	} else if (cobc_gen_listing == 2) {
-	/* LCOV_EXCL_START */
+	} else if (cobc_gen_listing > 1) {
 		fn->listing_file = cobc_stradd_dup (fbasename, ".xrf");
-	/* LCOV_EXCL_STOP */
 #endif
 	}
 
@@ -3977,17 +3676,13 @@ process (const char *cmd)
 }
 #endif
 
-static COB_INLINE COB_A_INLINE void
-force_new_page_for_next_line (void)
-{
-	cb_listing_linecount = cb_lines_per_page;
-}
-
 /* Preprocess source */
 
 static int
 preprocess (struct filename *fn)
 {
+	struct cobc_mem_struct	*m;
+	struct cobc_mem_struct	*ml;
 	const char		*sourcename;
 	int			save_source_format;
 	int			save_fold_copy;
@@ -4000,6 +3695,10 @@ preprocess (struct filename *fn)
 #endif
 	int			ret;
 #endif
+
+	/* Initialize */
+	cb_source_file = NULL;
+	cb_source_line = 0;
 
 	if (cb_unix_lf) {
 		ppout = fopen(fn->preprocess, "wb");
@@ -4075,18 +3774,19 @@ preprocess (struct filename *fn)
 	/* Release flex buffers - After file close */
 	plex_call_destroy ();
 
+	for (m = cobc_plexmem_base; m; ) {
+		ml = m;
+		m = m->next;
+		cobc_free (ml);
+	}
+	cobc_plexmem_base = NULL;
+
 	if (cobc_gen_listing && !cobc_list_file) {
 		if (unlikely(fclose (cb_listing_file) != 0)) {
 			cobc_terminate(fn->listing_file);
 		}
 #ifndef COB_INTERNAL_XREF
-		/* external cross-reference with cobxref */
-		if (cobc_gen_listing == 2) {
-			/* LCOV_EXCL_START */
-			if (cb_src_list_file) {
-				fclose (cb_src_list_file);
-			}
-
+		if (cobc_gen_listing > 1) {
 			snprintf (cobc_buffer, cobc_buffer_size,
 				 "cobxref %s -R", fn->listing_file);
 			cobc_buffer[cobc_buffer_size] = 0;
@@ -4110,20 +3810,7 @@ preprocess (struct filename *fn)
 				putc ('\n', stderr);
 				fflush (stderr);
 			}
-			if (cb_listing_outputfile) {
-				if (cb_unix_lf) {
-					cb_src_list_file = fopen (cb_listing_outputfile, "ab");
-				} else {
-					cb_src_list_file = fopen (cb_listing_outputfile, "a");
-				}
-				if (!cb_src_list_file) {
-					cobc_terminate (cb_listing_outputfile);
-				}
-				cb_listing_eject = 1;
-				force_new_page_for_next_line ();
-			}
 			unlink (fn->listing_file);
-			/* LCOV_EXCL_STOP */
 		}
 #endif
 		cb_listing_file = NULL;
@@ -4139,97 +3826,77 @@ preprocess (struct filename *fn)
 
 /* Routines to generate program listing */
 
-
 static void
-set_listing_header_code (void)
+set_listing_title_code (void)
 {
-	strcpy (cb_listing_header, "LINE    ");
+	strcpy (cb_listing_title, "LINE    ");
 	if (cb_listing_file_struct->source_format != CB_FORMAT_FREE) {
-		strcat (cb_listing_header,
+		strcat (cb_listing_title,
 			"PG/LN  A...B..............................."
 			".............................");
 		if (cb_listing_wide) {
 			if (cb_listing_file_struct->source_format == CB_FORMAT_FIXED
 			    && cb_text_column == 72) {
-				strcat (cb_listing_header, "SEQUENCE");
+				strcat (cb_listing_title, "SEQUENCE");
 			} else {
-				strcat (cb_listing_header,
+				strcat (cb_listing_title,
 					"........................................");
 			}
 		}
 	} else {
 		if (cb_listing_wide) {
-			strcat (cb_listing_header,
+			strcat (cb_listing_title,
 				"................................");
 		}
-		strcat (cb_listing_header,
+		strcat (cb_listing_title,
 			".....................SOURCE..................."
 			"..........................");
 		if (cb_listing_wide) {
-			strcat (cb_listing_header, "........");
+			strcat (cb_listing_title, "........");
 		}
 	}
 }
 
 static void
-set_listing_header_symbols (void)
+set_listing_title_symbols (void)
 {
-	strcpy (cb_listing_header,
+	strcpy (cb_listing_title,
 		"SIZE  TYPE           LVL  NAME                           PICTURE");
 }
 
 #ifdef COB_INTERNAL_XREF
-/* listing header for internal xref */
 static void
-set_listing_header_xref (const enum xref_type type)
+set_listing_title_xref (const enum xref_type type)
 {
-	if (type == XREF_FUNCTION) {
-		strcpy (cb_listing_header, "FUNCTION");
-	} else if (type == XREF_LABEL) {
-		strcpy (cb_listing_header, "LABEL   ");
+	if (type == XREF_LABEL) {
+		strcpy (cb_listing_title, "LABEL");
 	} else {
-		strcpy (cb_listing_header, "NAME    ");
+		strcpy (cb_listing_title, "NAME ");
 	}
-	if (type == XREF_FUNCTION) {
-		strcat (cb_listing_header,
-			"                       TYPE                   ");
-	} else {
-		strcat (cb_listing_header,
-			"                       DEFINED                ");
-	}
+	strcat (cb_listing_title,
+		"                          DEFINED                ");
 	if (cb_listing_wide) {
-		strcat (cb_listing_header, "                    ");
+		strcat (cb_listing_title, "                    ");
 	}
-	strcat (cb_listing_header, "REFERENCES");
+	strcat (cb_listing_title, "REFERENCES");
 }
 #endif
 
-/* listing header empty */
 static void
-set_listing_header_none (void)
+set_listing_title_none (void)
 {
-	cb_listing_header[0] = 0;
-}
-
-/* standard title for listing
-   (TODO: option to set by directive and/or command line option) */
-static void
-set_standard_title (void)
-{
-	char		version[20];
-	sprintf (version, "%s.%d", PACKAGE_VERSION, PATCH_LEVEL);
-	snprintf (cb_listing_title, 80, "%s %s",
-		PACKAGE_NAME,
-		version);
+	cb_listing_title[0] = 0;
 }
 
 /* print header */
 static void
 print_program_header (void)
 {
+	char		version[20];
 	const char	*format_str;
 
 	cb_listing_linecount = 1;
+	sprintf (version, "%s.%d", PACKAGE_VERSION, PATCH_LEVEL);
 
 	/* header for print listing (with page breaks) */
 	if (cb_lines_per_page != 0) {
@@ -4239,13 +3906,14 @@ print_program_header (void)
 			cb_listing_eject = 1;
 		}
 		if (cb_listing_wide) {
-			format_str = "%-23.23s %-61.61s %s  Page %04d\n";
+			format_str = "%s %-14.14s %-61.61s %s  Page %04d\n\n";
 		} else {
-			format_str = "%-23.23s %-20.20s %s  Page %04d\n";
+			format_str = "%s %-14.14s %-20.20s %s  Page %04d\n\n";
 		}
 		fprintf (cb_src_list_file,
 			 format_str,
-			 cb_listing_title,
+			 PACKAGE_NAME,
+			 version,
 			 cb_listing_filename,
 			 cb_listing_date,
 			 ++cb_listing_page);
@@ -4256,23 +3924,24 @@ print_program_header (void)
 		if (cb_listing_page == 0) {
 			cb_listing_page = 1;
 			if (cb_listing_wide) {
-				format_str = "%-28.28s %-66.66s %s\n";
+				format_str = "%s %-19.19s %-66.66s %s\n\n";
 			} else {
-				format_str = "%-28.28s %-26.26s %s\n";
+				format_str = "%s %-19.19s %-26.26s %s\n\n";
 			}
 			fprintf (cb_src_list_file,
 				 format_str,
-				 cb_listing_title,
+				 PACKAGE_NAME,
+				 version,
 				 cb_listing_filename,
 				 cb_listing_date);
 		} else {
+			fputc ('\n', cb_src_list_file);
 		}
 	}
-	fputc ('\n', cb_src_list_file);
 
 	/* print second header if set */
-	if (cb_listing_header[0]) {
-		print_program_data (cb_listing_header);
+	if (cb_listing_title[0]) {
+		print_program_data (cb_listing_title);
 		print_program_data ("");
 	}
 }
@@ -4299,7 +3968,7 @@ print_program_data (const char *data)
 static char *
 check_filler_name (char *name)
 {
-	if (strlen (name) >= 6 && memcmp (name, "FILLER", 6) == 0) {
+	if (!memcmp (name, "FILLER", 6)) {
 		name = (char *)"FILLER";
 	}
 	return name;
@@ -4375,7 +4044,7 @@ set_picture (struct cb_field *field, char *picture, int picture_len)
 		strncpy (picture, field->pic->orig, picture_len - 1);
 		return 1;
 	}
-
+	
 	strcat (picture, picture_usage);
 	return 1;
 }
@@ -4442,7 +4111,7 @@ set_category (int category, int usage, char *type)
 		strcpy (type, "POINTER");
 		break;
 	default:
-		strcpy (type, "UNKNOWN");	/* LCOV_EXCL_LINE */
+		strcpy (type, "UNKNOWN");
 	}
 }
 
@@ -4451,19 +4120,21 @@ terminate_str_at_first_trailing_space (char * const str)
 {
 	int	i;
 
-	for (i = strlen (str) - 1; i && isspace ((unsigned char)str[i]); i--) {
+	for (i = strlen (str) - 1; i && isspace (str[i]); i--) {
 		str[i] = '\0';
 	}
 }
 
 static void
-print_88_values (struct cb_field *field)
+print_88_values (int lvl, struct cb_field *field)
 {
 	struct cb_field *f;
-	char lcl_name[LCL_NAME_LEN] = { '\0' };
+	char lcl_name[80];
 
 	for (f = field->validation; f; f = f->sister) {
-		strncpy (lcl_name, (char *)f->name, LCL_NAME_MAX);
+		memset (lcl_name, 0, sizeof(lcl_name));
+		memset (lcl_name, ' ', lvl * 2);
+		strncat (lcl_name, (char *)f->name, sizeof(lcl_name) - lvl * 2 - 1);
 		snprintf (print_data, CB_PRINT_LEN,
 			"      %-14.14s %02d   %s",
 			"CONDITIONAL", f->level, lcl_name);
@@ -4471,9 +4142,9 @@ print_88_values (struct cb_field *field)
 	}
 }
 
-/* print all fields including sister and child elements */
-static void
-print_fields (struct cb_field *top, int *found)
+/* print fields with given indentation*/
+static int
+print_fields (int indent, struct cb_field *top)
 {
 	int	first = 1;
 	int	get_cat;
@@ -4482,25 +4153,20 @@ print_fields (struct cb_field *top, int *found)
 	int	picture_len = cb_listing_wide ? 64 : 24;
 	char	type[20];
 	char	picture[CB_LIST_PICSIZE];
-	char	lcl_name[LCL_NAME_LEN];
+	char	lcl_name[80];
+	int	found = 0;
 
 	for (; top; top = top->sister) {
 		if (!top->level) {
 			continue;
 		}
-		if (*found == 0) {
-			*found = 1;
-			/* MAYBE use a second header line and a forced page break instead */
-			snprintf (print_data, CB_PRINT_LEN,
-				"      %s", cobc_enum_explain_storage(top->storage));
-			print_program_data (print_data);
-			print_program_data ("");
-		}
+		found = 1;
 
-		strncpy (lcl_name, check_filler_name ((char *)top->name),
-			 LCL_NAME_MAX);
+		memset (lcl_name, 0, sizeof(lcl_name));
+		memset (lcl_name, ' ', indent * 2);
+		strcat (lcl_name, check_filler_name((char *)top->name));
 		get_cat = 1;
-		got_picture = 1;
+		got_picture = 1;;
 
 		if (top->children) {
 			strcpy (type, "GROUP");
@@ -4524,6 +4190,8 @@ print_fields (struct cb_field *top, int *found)
 				picture[0] = 0;
 			}
 			got_picture = set_picture (top, picture, picture_len);
+			if (top->redefines)
+				strcat (type, "-R");
 		}
 
 		if (top->flag_any_length || top->flag_unbounded) {
@@ -4552,26 +4220,23 @@ print_fields (struct cb_field *top, int *found)
 				pd_off += sprintf (print_data + pd_off, "OCCURS %d", top->occurs_max);
 			}
 		}
-		if (top->redefines && !top->file) {
-			pd_off += sprintf (print_data + pd_off, ", REDEFINES %s", top->redefines->name);
-		}
 		print_program_data (print_data);
 
 		first = 0;
 		old_level = top->level;
-		print_88_values (top);
+		print_88_values (indent + 1, top);
 
 		if (top->children) {
-			print_fields (top->children, found);
+			print_fields (indent + 1, top->children);
 		}
 	}
+	return found;
 }
 
 static void
 print_files_and_their_records (cb_tree file_list_p)
 {
 	cb_tree	l;
-	int dummy = 1;
 
 	for (l = file_list_p; l; l = CB_CHAIN (l)) {
 		snprintf (print_data, CB_PRINT_LEN,
@@ -4581,7 +4246,7 @@ print_files_and_their_records (cb_tree file_list_p)
 			 CB_FILE (CB_VALUE (l))->name);
 		print_program_data (print_data);
 		if (CB_FILE (CB_VALUE (l))->record) {
-			print_fields (CB_FILE (CB_VALUE (l))->record, &dummy);
+			print_fields (0, CB_FILE (CB_VALUE (l))->record);
 			print_program_data ("");
 		}
 	}
@@ -4592,7 +4257,7 @@ print_fields_in_section (struct cb_field *first_field_in_section)
 {
 	int found = 0;
 	if (first_field_in_section != NULL) {
-		print_fields (first_field_in_section, &found);
+		found = !!print_fields (0, first_field_in_section);
 		if (found) {
 			print_program_data ("");
 		}
@@ -4602,23 +4267,19 @@ print_fields_in_section (struct cb_field *first_field_in_section)
 
 /* create xref_elem with line number for existing xref entry */
 void
-cobc_xref_link (struct cb_xref *list, const int line, const int receiving)
+cobc_xref_link (struct cb_xref *list, const int line)
 {
 #ifdef COB_INTERNAL_XREF
 	struct cb_xref_elem *elem;
 
 	for (elem = list->head; elem; elem = elem->next) {
 		if (elem->line == line) {
-			if (receiving) {
-				elem->receive = 1;
-			}
 			return;
 		}
 	}
 
 	elem = cobc_parse_malloc (sizeof (struct cb_xref_elem));
 	elem->line = line;
-	elem->receive = receiving;
 
 	/* add xref_elem to head/tail
 	   remark: if head == NULL, then tail may contain reference to child's
@@ -4633,7 +4294,6 @@ cobc_xref_link (struct cb_xref *list, const int line, const int receiving)
 #else
 	COB_UNUSED (list);
 	COB_UNUSED (line);
-	COB_UNUSED (receiving);
 #endif
 }
 
@@ -4656,68 +4316,6 @@ cobc_xref_link_parent (const struct cb_field *field)
 	}
 #else
 	COB_UNUSED (field);
-#endif
-}
-
-/* add a "receiving" entry for a given field reference */
-void
-cobc_xref_set_receiving (const cb_tree target_ext)
-{
-#ifdef COB_INTERNAL_XREF
-	cb_tree	target = target_ext;
-	struct cb_field		*target_fld;
-	int				xref_line;
-
-	if (CB_CAST_P (target)) {
-		target = CB_CAST (target)->val;
-	}
-	if (CB_REF_OR_FIELD_P (target)) {
-		target_fld = CB_FIELD_PTR (target);
-	} else {
-		return;
-	}
-	if (CB_REFERENCE_P (target)) {
-		xref_line = CB_REFERENCE (target)->common.source_line;
-	} else if (current_statement) {
-		xref_line = current_statement->common.source_line;
-	} else {
-		xref_line = cb_source_line;
-	}
-	cobc_xref_link (&target_fld->xref, xref_line, 1);
-#else
-	COB_UNUSED (target_ext);
-#endif
-}
-
-void
-cobc_xref_call (const char *name, const int line, const int is_ident, const int is_sys)
-{
-#ifdef COB_INTERNAL_XREF
-	struct cb_call_elem	*elem;
-
-	for (elem = current_program->call_xref.head; elem; elem = elem->next) {
-		if (!strcmp (name, elem->name)) {
-			cobc_xref_link (&elem->xref, line, 0);
-			return;
-		}
-	}
-
-	elem = cobc_parse_malloc (sizeof (struct cb_call_elem));
-	elem->name = cobc_strdup (name);
-	elem->is_identifier = is_ident;
-	elem->is_system = is_sys;
-	cobc_xref_link (&elem->xref, line, 0);
-
-	if (current_program->call_xref.head == NULL) {
-		current_program->call_xref.head = elem;
-	} else if (current_program->call_xref.tail != NULL) {
-		current_program->call_xref.tail->next = elem;
-	}
-	current_program->call_xref.tail = elem;
-#else
-	COB_UNUSED (name);
-	COB_UNUSED (line);
-	COB_UNUSED (is_ident);
 #endif
 }
 
@@ -4746,6 +4344,7 @@ xref_print (struct cb_xref *xref, const enum xref_type type, struct cb_xref *xre
 			} else {
 				sprintf (print_data + pd_off, "not referenced");
 			}
+			return;
 		} else {
 			sprintf (print_data + pd_off, "not referenced");
 		}
@@ -4775,10 +4374,10 @@ static void
 xref_88_values (struct cb_field *field)
 {
 	struct cb_field *f;
-	char lcl_name[LCL_NAME_LEN] = { '\0' };
+	char lcl_name[80];
 
 	for (f = field->validation; f; f = f->sister) {
-		strncpy (lcl_name, (char *)f->name, LCL_NAME_MAX);
+		strcpy (lcl_name, (char *)f->name);
 		pd_off = sprintf (print_data,
 			"%-30.30s %-6d ",
 			lcl_name, f->common.source_line);
@@ -4790,19 +4389,15 @@ xref_88_values (struct cb_field *field)
 static int
 xref_fields (struct cb_field *top)
 {
-	char		lcl_name[LCL_NAME_LEN] = { '\0' };
-	int		found = 0;
+	char		lcl_name[80];
+	int			found = 0;
 
 	for (; top; top = top->sister) {
-
-		/* no entry for internal generated fields
-		   other than used special indexes */
-		if (!top->level || (top->special_index && !top->count)) {
+		if (!top->level) {
 			continue;
 		}
 
-		strncpy (lcl_name, check_filler_name ((char *)top->name),
-			 LCL_NAME_MAX);
+		strcpy (lcl_name, check_filler_name((char *)top->name));
 		if (!strcmp (lcl_name, "FILLER") && !top->validation) {
 			if (top->children) {
 				found += xref_fields (top->children);
@@ -4877,18 +4472,20 @@ xref_labels (cb_tree label_list_p)
 			}
 			if (lab->flag_entry) {
 				label_type = 'E';
-				sprintf (print_data, "E %-28.28s %d",
-					lab->name, lab->common.source_line);
-				print_program_data (print_data);
-				continue;
 			} else if (lab->flag_section) {
 				label_type = 'S';
 			} else {
 				label_type = 'P';
 			}
-			pd_off = sprintf (print_data, "%c %-28.28s %-6d ",
-				label_type, lab->name, lab->common.source_line);
-			xref_print (&lab->xref, XREF_LABEL, NULL);
+			if (label_type != 'E') {
+				pd_off = sprintf (print_data, "%c %-28.28s %-6d",
+					label_type, lab->name, lab->common.source_line);
+				xref_print (&lab->xref, XREF_LABEL, NULL);
+			} else {
+				sprintf (print_data, "E %-28.28s %d",
+					lab->name, lab->common.source_line);
+				print_program_data (print_data);
+			}
 		}
 	}
 	if (label_type == ' ') {
@@ -4897,179 +4494,130 @@ xref_labels (cb_tree label_list_p)
 		return 1;
 	}
 }
-
-static int
-xref_calls (struct cb_call_xref *list)
-{
-	struct cb_call_elem *elem;
-	int gotone = 0;
-
-	if (list->head) {
-		set_listing_header_xref (XREF_FUNCTION);
-		force_new_page_for_next_line ();
-		print_program_header ();
-	}
-
-	for (elem = list->head; elem; elem = elem->next) {
-		gotone = 1;
-		pd_off = sprintf (print_data, "%c %-28.28s %-6.6s ",
-			elem->is_identifier ? 'I' : 'L',
-			elem->name,
-			elem->is_system ? "SYSTEM" : "EXTERN");
-		xref_print (&elem->xref, XREF_FUNCTION, NULL);
-	}
-	return gotone;
-}
 #endif
+
+static COB_INLINE COB_A_INLINE void
+force_new_page_for_next_line (void)
+{
+	cb_listing_linecount = cb_lines_per_page;
+}
 
 static void
 print_program_trailer (void)
 {
 	struct cb_program	*p;
 	struct cb_program	*q;
-	struct list_error	*err;
 	int			print_names = 0;
 	int			print_break = 1;
 	int			found;
-	char			err_msg[BUFSIZ];
 
-	/* needed for syntax-checks-only as codegen reverses the program list */
-	if (cb_flag_syntax_only) {
-		p = program_list_reverse (current_program);
-	} else {
-		p = current_program;
+#if 0 /* checkme: needed for syntax-checks-only? */
+	p = program_list_reverse (current_program);
+#else
+	p = current_program;
+#endif
+	if (p && p->next_program) {
+		print_names = 1;
 	}
 
-	if (p != NULL) {
+	if (!cb_no_symbols && p != NULL) {
+		/* Print file/symbol tables */
 
-	/* Print program in symbol table / cross-reference if more than one program */
-	/* MAYBE use a second header line and a forced page break instead */
-		if (p->next_program) {
-			print_names = 1;
+		set_listing_title_symbols();
+		force_new_page_for_next_line ();
+		print_program_header ();
+
+		for (q = p; q; q = q->next_program) {
+			if (print_names) {
+				sprintf (print_data,
+					"      %-14s      %s",
+			 	 	(q->prog_type == CB_FUNCTION_TYPE ?
+				 		"FUNCTION" : "PROGRAM"),
+			 	 	q->program_name);
+				print_program_data (print_data);
+				print_program_data ("");
+			}
+			found = 0;
+			if (q->file_list) {
+				print_files_and_their_records (q->file_list);
+				found++;
+			}
+			found += print_fields_in_section (q->working_storage);
+			found += print_fields_in_section (q->local_storage);
+			found += print_fields_in_section (q->linkage_storage);
+			found += print_fields_in_section (q->screen_storage);
+			found += print_fields_in_section (q->report_storage);
+			if (!found) {
+				snprintf (print_data, CB_PRINT_LEN, "      %s", _("No fields defined."));
+				print_program_data (print_data);
+				print_program_data ("");
+			}
 		}
-	
-		/* Print file/symbol tables if requested */
-		if (cb_listing_symbols) {
-			set_listing_header_symbols();
+		print_break = 0;
+	}
+
+#ifdef COB_INTERNAL_XREF
+	if (cb_listing_xref && p != NULL) {
+		/* Print cross reference */
+
+		for (q = p; q; q = q->next_program) {
+
+			set_listing_title_xref (XREF_FIELD);
 			force_new_page_for_next_line ();
 			print_program_header ();
 
-			for (q = p; q; q = q->next_program) {
-				if (print_names) {
-					sprintf (print_data,
-						"      %-14s      %s",
-			 	 		(q->prog_type == CB_FUNCTION_TYPE ?
-				 			"FUNCTION" : "PROGRAM"),
-			 	 		q->program_name);
-					print_program_data (print_data);
-					print_program_data ("");
-				}
-				found = 0;
-				if (q->file_list) {
-					print_files_and_their_records (q->file_list);
-					found++;
-				}
-				found += print_fields_in_section (q->working_storage);
-				found += print_fields_in_section (q->local_storage);
-				found += print_fields_in_section (q->linkage_storage);
-				found += print_fields_in_section (q->screen_storage);
-				found += print_fields_in_section (q->report_storage);
-				if (!found) {
-					snprintf (print_data, CB_PRINT_LEN, "      %s",
-						_("No fields defined."));
-					print_program_data (print_data);
-					print_program_data ("");
-				}
+			if (print_names) {
+				sprintf (print_data,
+					 "%s %s",
+			 	 	(q->prog_type == CB_FUNCTION_TYPE ?
+				 		"FUNCTION" : "PROGRAM"),
+			 	 	q->program_name);
+				print_program_data (print_data);
+				print_program_data ("");
 			}
-			print_break = 0;
-		}
-
-#ifdef COB_INTERNAL_XREF
-		/* Print internal cross reference if requested */
-		if (cb_listing_xref) {
-
-			for (q = p; q; q = q->next_program) {
-
-				set_listing_header_xref (XREF_FIELD);
-				force_new_page_for_next_line ();
-				print_program_header ();
-
-				if (print_names) {
-					sprintf (print_data,
-						 "%s %s",
-			 	 		(q->prog_type == CB_FUNCTION_TYPE ?
-				 			"FUNCTION" : "PROGRAM"),
-			 	 		q->program_name);
-					print_program_data (print_data);
-					print_program_data ("");
-				}
-				found = 0;
-				if (q->file_list) {
-					xref_files_and_their_records (q->file_list);
-					found++;
-				}
-				found += xref_fields_in_section (q->working_storage);
-				found += xref_fields_in_section (q->local_storage);
-				found += xref_fields_in_section (q->linkage_storage);
-				found += xref_fields_in_section (q->screen_storage);
-				found += xref_fields_in_section (q->report_storage);
-				if (!found) {
-					snprintf (print_data, CB_PRINT_LEN, "      %s",
-						_("No fields defined."));
-					print_program_data (print_data);
-					print_program_data ("");
-				}
-
-				set_listing_header_xref (XREF_LABEL);
-				force_new_page_for_next_line ();
-				print_program_header ();
-
-				if (print_names) {
-					sprintf (print_data,
-						 "%s %s",
-			 	 		(q->prog_type == CB_FUNCTION_TYPE ?
-				 			"FUNCTION" : "PROGRAM"),
-			 	 		q->program_name);
-					print_program_data (print_data);
-					print_program_data ("");
-				}
-				if (!xref_labels (q->exec_list)) {
-					snprintf (print_data, CB_PRINT_LEN, "      %s",
-						_("No labels defined."));
-					print_program_data (print_data);
-					print_program_data ("");
-				};
-
-				xref_calls (&q->call_xref);
+			found = 0;
+			if (q->file_list) {
+				xref_files_and_their_records (q->file_list);
+				found++;
 			}
-			print_break = 0;
+			found += xref_fields_in_section (q->working_storage);
+			found += xref_fields_in_section (q->local_storage);
+			found += xref_fields_in_section (q->linkage_storage);
+			found += xref_fields_in_section (q->screen_storage);
+			found += xref_fields_in_section (q->report_storage);
+			if (!found) {
+				snprintf (print_data, CB_PRINT_LEN, "      %s", _("No fields defined."));
+				print_program_data (print_data);
+				print_program_data ("");
+			}
+
+			set_listing_title_xref (XREF_LABEL);
+			force_new_page_for_next_line ();
+			print_program_header ();
+
+			if (print_names) {
+				sprintf (print_data,
+					 "%s %s",
+			 	 	(q->prog_type == CB_FUNCTION_TYPE ?
+				 		"FUNCTION" : "PROGRAM"),
+			 	 	q->program_name);
+				print_program_data (print_data);
+				print_program_data ("");
+			}
+			if (!xref_labels (q->exec_list)) {
+				snprintf (print_data, CB_PRINT_LEN, "      %s", _("No labels defined."));
+				print_program_data (print_data);
+				print_program_data ("");
+			};
 		}
-#endif
+		print_break = 0;
 	}
+#endif
 
-	set_listing_header_none();
+	set_listing_title_none();
 	print_program_data ("");
 	if (print_break) {
 		print_program_data ("");
-	}
-
-	/* Print error/warning summary */
-	if (cb_listing_error_head) {
-		force_new_page_for_next_line ();
-		print_program_data (_("Error/Warning summary:"));
-		print_program_data ("");
-		err = cb_listing_error_head;
-		do {
-			snprintf (err_msg, BUFSIZ, "%s: %d: %s%s",
-				err->file, err->line, err->prefix, err->msg);
-			print_program_data (err_msg);
-			err = err->next;
-		} while (err);
-		print_program_data ("");
-
-		free_error_list (cb_listing_error_head);
-		cb_listing_error_head = NULL;
-		cb_listing_error_tail = NULL;
 	}
 
 	/* Print error counts */
@@ -5083,8 +4631,7 @@ print_program_trailer (void)
 		print_program_data (_("1 warning in compilation group"));
 		break;
 	default:
-		snprintf (print_data, CB_PRINT_LEN,
-			_("%d warnings in compilation group"), warningcount);
+		snprintf (print_data, CB_PRINT_LEN, _("%d warnings in compilation group"), warningcount);
 		print_program_data (print_data);
 		break;
 	}
@@ -5097,45 +4644,28 @@ print_program_trailer (void)
 		print_program_data (_("1 error in compilation group"));
 		break;
 	default:
-		snprintf (print_data, CB_PRINT_LEN,
-			_("%d errors in compilation group"), errorcount);
+		snprintf (print_data, CB_PRINT_LEN, _("%d errors in compilation group"), errorcount);
 		print_program_data (print_data);
 		break;
-	}
-	if (errorcount > cb_max_errors) {
-		snprintf (print_data, CB_PRINT_LEN,
-			_("Too many errors in compilation group: %d maximum errors"),
-			cb_max_errors);
-		print_program_data (print_data);
 	}
 	force_new_page_for_next_line ();
 }
 
 /*
-  return pointer to next non-space character
-*/
-static COB_INLINE COB_A_INLINE char *
-get_next_nonspace (char * pos)
-{
-	while (*pos != '\0' && isspace ((unsigned char)*pos)) {
-		pos++;
-	}
-	return pos;
-}
-
-/*
-  Find next token after bp, copy it to token and copy the token terminator to
+  Find next token after bp, copy it to token and store the token terminator in
   term. Return pointer to the character after the terminator.
 */
 static char *
 get_next_token (char *bp, char *token, char *term)
 {
-	char	*token_start = token;
-	int	in_string = 0;
+	char *token_start = token;
 
 	/* Repeat until a token is found */
 	do {
-		bp = get_next_nonspace (bp);
+		/* Find first non-space character */
+		while (*bp && isspace (*bp)) {
+			bp++;
+		}
 
 		term[0] = '\0';
 		term[1] = '\0';
@@ -5145,19 +4675,13 @@ get_next_token (char *bp, char *token, char *term)
 
 		/* Copy characters into token until a terminator is found. */
 		while (*bp) {
-			/* Return character strings as a single token */
-			if (*bp == '"' || *bp == '\'') {
-				in_string = !in_string;
-				*token++ = *bp++;
+			if (*bp == '&') {
+				bp++;
 				continue;
 			}
-			if (in_string) {
-				*token++ = *bp++;
-				continue;
-			}
-			if (*bp == '.' && isdigit((unsigned char)*(bp + 1))) {
+			if (*bp == '.' && isdigit(*(bp + 1))) {
 				;
-			} else if (isspace ((unsigned char)*bp) || *bp == ',' || *bp == '.' || *bp == ';') {
+			} else if (isspace (*bp) || *bp == ',' || *bp == '.' || *bp == ';') {
 				term[0] = *bp++;
 				break;
 			}
@@ -5230,158 +4754,37 @@ get_next_listing_line (FILE *fd, char **pline, int fixed)
 	return i;
 }
 
-/*
-  return pointer to first non-space character (ignoring sequence area)
-*/
-static COB_INLINE COB_A_INLINE char *
-get_first_nonspace (char *line, const enum cb_format source_format)
-{
-	if (source_format != CB_FORMAT_FREE) {
-		return get_next_nonspace (line + CB_INDICATOR + 1);
-	} else {
-		return get_next_nonspace (line);
-	}
-}
-
-/*
-  check for compiler directive indicator and return
-  position of compiler instruction or NULL if not found
-*/
-static char *
-get_directive_start (char *line, const enum cb_format source_format)
-{
-	char	*curr_pos;
-
-	curr_pos = get_first_nonspace (line, source_format);
-	if (*curr_pos == '>' && *++curr_pos == '>') {
-		curr_pos = get_next_nonspace (++curr_pos);
-		if (*curr_pos != 0) {
-			return curr_pos;
-		}
-	}
-	return NULL;
-}
-
-/*
-  check for >> LISTING directive and set on_off value
-*/
 static int
-line_has_listing_directive (char *line, const enum cb_format source_format, int *on_off)
+line_has_page_eject (const char *line, const int fixed)
 {
-	char	*token;
+	char	*directive_start;
 
-	token = get_directive_start (line, source_format);
-	
-	if (token != NULL &&
-		!strncasecmp (token, "LISTING", 7)) {
-		token += 7;
+	if (fixed && line[CB_INDICATOR] == '/') {
+		return 1;
+	} else {
+		directive_start = strchr (line, '>');
+		return directive_start != NULL
+			&& !strncasecmp (directive_start, ">>PAGE", 6);
+	}
+}
+
+static int
+line_has_listing_directive (const char *line, int *on_off)
+{
+	char	*directive_start;
+	char	token[32], term[2];
+
+	directive_start = strchr (line, '>');
+	if (directive_start != NULL &&
+		!strncasecmp (directive_start, ">>LISTING", 9)) {
+		directive_start += 9;
 		*on_off = 1;
-		token = get_next_nonspace (token);
-		if (!strncasecmp (token, "OFF", 3))
+		get_next_token (directive_start, token, term);
+		if (!strcasecmp (token, "OFF"))
 			*on_off = 0;
 		return 1;
 	}
 	return 0;
-}
-
-/*
-  check for >> PAGE directive and page eject indicator
-*/
-static int
-line_has_page_eject (char *line, const enum cb_format source_format)
-{
-	char	*directive_start;
-
-	if (source_format != CB_FORMAT_FREE && line[CB_INDICATOR] == '/') {
-		return 1;
-	} else {
-		directive_start = get_directive_start (line, source_format);
-		return directive_start != NULL
-			&& !strncasecmp (directive_start, "PAGE", 4);
-	}
-}
-/*
-  check for listing statements in current line and handle them
-*/
-static int
-line_has_listing_statement (char *line, const enum cb_format source_format)
-{
-	char	*statement_start, *curr_pos;
-	int		size;
-
-	/* check if we actually want to process any listing statement */
-	if (cb_listing_statements > CB_OBSOLETE) {
-		return 0;
-	}
-
-	curr_pos = get_first_nonspace (line, source_format);
-
-	if (curr_pos == NULL) {
-		return 0;
-	}
-
-	statement_start = curr_pos++;
-
-	/* extract first word with max. length of 6 */
-	for (size = 1; size < 6 && curr_pos != 0; size++, curr_pos++) {
-		if ((*curr_pos == ' ' )
-			||  (*curr_pos == '.' )
-			||  (*curr_pos == '*' && (*(curr_pos + 1) == '>' ) )) {
-			break;
-		}
-	}
-
-	/* compare word against listing statements */
-	if (size != 5) {
-		return 0;
-	}
-	if ((strncasecmp (statement_start, "EJECT", 5))
-	&&  (strncasecmp (statement_start, "SKIP1", 5))
-	&&  (strncasecmp (statement_start, "SKIP2", 5))
-	&&  (strncasecmp (statement_start, "SKIP3", 5))
-	&&  (strncasecmp (statement_start, "TITLE", 5))) {
-		return 0;
-	}
-
-	/* handle statements */
-	if (!strncasecmp (statement_start, "TITLE", 5)) {
-		/* check if we actually want to process TITLE as a statement 
-		   note: the title statement is an extra listing-directive statement */
-		if (cb_title_statement > CB_OBSOLETE) {
-			return 0;
-		}
-
-		/* FIXME: the title should be handled correctly as literal */
-		while (*curr_pos != 0) {
-			if (*++curr_pos != ' ') {
-				curr_pos++; /* skip start of literal */
-				break;
-			}
-		}
-		statement_start = curr_pos;
-		for (size = 1; size < 80 && curr_pos != 0; size++, curr_pos++) {
-			if ((*curr_pos == '.' )
-				||  (*curr_pos == '*' && (*(curr_pos + 1) == '>' ) )) {
-				break;
-			}
-		}
-		snprintf (print_data, size, "%s", statement_start);
-		terminate_str_at_first_trailing_space (print_data);
-		size = strlen (print_data);
-		snprintf (cb_listing_title, size, "%s", print_data);
-		force_new_page_for_next_line ();
-	} else {
-		if (!strncasecmp (statement_start, "EJECT", 5)) {
-			force_new_page_for_next_line ();
-		} else if (!strncasecmp (statement_start, "SKIP1", 5))  {
-			print_program_data ("\n");
-		} else if (!strncasecmp (statement_start, "SKIP2", 5)) {
-			print_program_data ("\n\n");
-		} else if (!strncasecmp (statement_start, "SKIP3", 5)) {
-			print_program_data ("\n\n\n");
-		}
-	}
-	return 1;
 }
 
 static void
@@ -5446,10 +4849,6 @@ print_errors_for_line (const struct list_error * const first_error,
 	for (err = first_error; err; err = err->next) {
 		if (err->line == line_num) {
 			pd_off = snprintf (print_data, max_chars_on_line, "%s%s", err->prefix, err->msg);
-			if (pd_off == -1) {	/* snprintf returns -1 in MS and on HPUX if max is reached */
-				pd_off = max_chars_on_line;
-				print_data[max_chars_on_line - 1] = 0;
-			}
 			if (pd_off >= max_chars_on_line) {
 				/* trim on last space */
 				pd_off = strlen (print_data) - 1;
@@ -5477,15 +4876,15 @@ print_line (struct list_files *cfile, char *line, int line_num, int in_copy)
 	int	on_off;
 	char	pch;
 
+	if (line_has_page_eject (line, cfile->source_format != CB_FORMAT_FREE)) {
+		force_new_page_for_next_line ();
+	}
+
 	do_print = cfile->listing_on;
-	if (line_has_listing_directive (line, cfile->source_format, &on_off)) {
+	if (line_has_listing_directive (line, &on_off)) {
 		cfile->listing_on = on_off;
 		/* always print the directive itself */
 		do_print = 1;
-	} else if (line_has_page_eject (line, cfile->source_format)) {
-		force_new_page_for_next_line ();
-	} else if (line_has_listing_statement (line, cfile->source_format)) {
-		do_print = 0;
 	}
 
 	if (do_print) {
@@ -5517,8 +4916,6 @@ print_line (struct list_files *cfile, char *line, int line_num, int in_copy)
   the first_col of each line and up to the end of line or the sequence area (if
   fixed is true).
   Return the column to which pline[last_idx] was read up to.
-
-  first_col is zero-indexed.
 */
 static int
 compare_prepare (char *cmp_line, char *pline[CB_READ_AHEAD],
@@ -5536,22 +4933,22 @@ compare_prepare (char *cmp_line, char *pline[CB_READ_AHEAD],
 	/* Collapse pline into a string of tokens separated by spaces */
 	for (line_idx = first_idx; line_idx < last_idx; line_idx++) {
 		if (!fixed) {
-			last_col = strlen (pline[line_idx]) - 1;
+			last_col = strlen (pline[line_idx]);
 		}
 
-		/* Go to the last non-space character */
+		/* Go the last non-space character */
 		for (last_nonspace = last_col;
-		     isspace ((unsigned char)pline[line_idx][last_nonspace]) && last_nonspace > first_col;
+		     isspace (pline[line_idx][last_nonspace - 1]) && last_nonspace > first_col;
 		     last_nonspace--);
 		/* Go to first non-space character */
-		for (i = first_col; (i <= last_nonspace) && isspace ((unsigned char)pline[line_idx][i]); i++);
+		for (i = first_col; (i < last_nonspace) && isspace (pline[line_idx][i]); i++);
 
 		/* Copy chars between the first and last non-space characters */
-		while (i <= last_nonspace) {
-			if (isspace ((unsigned char)pline[line_idx][i])) {
+		while (i < last_nonspace) {
+			if (isspace (pline[line_idx][i])) {
 				cmp_line[out_pos++] = ' ';
-				for (i++; (i <= last_nonspace) && isspace ((unsigned char)pline[line_idx][i]); i++);
-				if (i > last_nonspace) {
+				for (i++; (i < last_nonspace) && isspace (pline[line_idx][i]); i++);
+				if (i == last_nonspace) {
 					break;
 				}
 			} else if (pline[line_idx][i] == '"') {
@@ -5567,14 +4964,14 @@ compare_prepare (char *cmp_line, char *pline[CB_READ_AHEAD],
 					in_string = 1;
 				}
 
-				for (; (i <= last_nonspace) && (pline[line_idx][i] != '"'); ) {
+				for (; (i < last_nonspace) && (pline[line_idx][i] != '"'); ) {
 					cmp_line[out_pos++] = pline[line_idx][i++];
 				}
 				if (pline[line_idx][i] == '"') {
 					cmp_line[out_pos++] = pline[line_idx][i++];
 					in_string = 0;
 				}
-				if (i > last_nonspace) {
+				if (i == last_nonspace) {
 					break;
 				}
 			} else {
@@ -5646,7 +5043,7 @@ is_continuation_line (char *line, int fixed)
 	}
 	if (fixed) {
 		/* check for "-" in column 7 */
-		if (IS_CONTINUE_LINE (line)) {
+		if (IS_CONTINUE_LINE(line)) {
 			return 1;
 		}
 	} else {
@@ -5663,7 +5060,7 @@ is_continuation_line (char *line, int fixed)
 }
 
 static void
-abort_if_too_many_continuation_lines (int pline_cnt, const char *filename, int line_num)
+pline_check_limit (int pline_cnt, const char *filename, int line_num)
 {
 	if (pline_cnt >= CB_READ_AHEAD) {
 		cobc_err_msg (_("%s: %d: Too many continuation lines"),
@@ -5672,219 +5069,18 @@ abort_if_too_many_continuation_lines (int pline_cnt, const char *filename, int l
 	}
 }
 
-static void
-make_new_continuation_line (const char *cfile_name, char *pline[CB_READ_AHEAD],
-			    int * const pline_cnt, int line_num)
-{
-	abort_if_too_many_continuation_lines (*pline_cnt + 1, cfile_name,
-					      line_num);
-	if (pline[*pline_cnt + 1] == NULL) {
-		pline[*pline_cnt + 1] = cobc_malloc (CB_LINE_LENGTH + 2);
-	}
-	strcpy (pline[*pline_cnt + 1], pline[*pline_cnt]);
-	strcpy (pline[*pline_cnt], pline[*pline_cnt - 1]);
-	memset (&pline[*pline_cnt][CB_MARGIN_A], ' ',
-		CB_SEQUENCE - CB_MARGIN_A);
-	pline[*pline_cnt][CB_INDICATOR] = '&';
-
-        (*pline_cnt)++;
-}
-
-static void
-add_token_over_multiple_lines (const char *cfile_name,
-			       char *pline[CB_READ_AHEAD],
-			       int * const pline_cnt,
-			       const int line_num,
-			       const char *new_token,
-			       const int first_col,
-			       int new_token_len,
-			       int * const out_line,
-			       int * const out_col)
-{
-	int	tok_char = 0;
-
-#ifdef DEBUG_REPLACE
-	fprintf (stdout, "   new_token_len = %d\n", new_token_len);
-#endif
-
-	while (new_token_len) {
-		/* Copy the token one character at a time. */
-		pline[*out_line][(*out_col)++] = new_token[tok_char++];
-		new_token_len--;
-
-		/*
-		  Move to the next line when reach the end of the current one.
-		*/
-		if (*out_col == CB_SEQUENCE) {
-#ifdef DEBUG_REPLACE
-			fprintf (stdout, "   NEW pline[%2d] = %s\n",
-				 *out_line, pline[*out_line]);
-#endif
-
-			*out_col = first_col;
-			(*out_line)++;
-
-			/*
-			  Allocate a new out_line if we are on the last
-			  out_line.
-			*/
-			if (*out_line == *pline_cnt) {
-				make_new_continuation_line (cfile_name, pline,
-							    pline_cnt, line_num);
-			}
-		}
-	}
-
-	pline[*out_line][(*out_col)++] = ' ';
-}
-
-static void
-reflow_replaced_fixed_format_text (const char *cfile_name, char *pline[CB_READ_AHEAD],
-				   int * const pline_cnt, const int line_num,
-				   char *newline, int first_col, const int last)
-{
-	int	first_nonspace;
-	char	*new_line_ptr;
-	char	new_token[CB_LINE_LENGTH + 2];
-	char	token_terminator[2];
-	int	out_col;
-	int	out_line;
-	int	force_next_line;
-	int	new_token_len;
-
-	new_line_ptr = get_next_token (newline, new_token, token_terminator);
-
-	/*
-	  Start adding tokens from margin B or the first non-space character.
-	*/
-	for (first_nonspace = first_col;
-	     (first_nonspace < last) && isspace (pline[0][first_nonspace]);
-	     first_nonspace++);
-	if (first_nonspace >= CB_MARGIN_B) {
-		first_col = CB_MARGIN_B;
-	}
-
-	/* For each line,  */
-	for (out_line = 0; out_line < *pline_cnt; out_line++) {
-		force_next_line = 0;
-		out_col = first_col;
-
-		/* Add as many token as possible to the current line. */
-		while (new_line_ptr && !force_next_line) {
-			new_token_len = strlen (new_token);
-			if (new_token_len >= (CB_SEQUENCE - first_col)) {
-				/*
-				  If the new token does not fit on this line,
-				  reflow it onto the next line.
-				*/
-			        add_token_over_multiple_lines (cfile_name, pline, pline_cnt, line_num,
-							       new_token, first_col, new_token_len,
-							       &out_line, &out_col);
-			} else if ((out_col + 2 + new_token_len) < last) {
-				/*
-				  If the new token *and* its terminator fits,
-				  copy it all onto the current line.
-				*/
-				strcpy (&pline[out_line][out_col], new_token);
-				out_col += strlen (new_token);
-
-				if (token_terminator[0]) {
-					pline[out_line][out_col++] = token_terminator[0];
-				} else {
-				        pline[out_line][out_col++] = ' ';
-				}
-				if (token_terminator[0] == '.') {
-					pline[out_line][out_col++] = ' ';
-				}
-			} else {
-				force_next_line = 1;
-				make_new_continuation_line (cfile_name, pline,
-							    pline_cnt, line_num);
-				continue;
-			}
-			new_line_ptr = get_next_token (new_line_ptr, new_token, token_terminator);
-		}
-
-		if (out_col == first_col) {
-			pline[out_line][CB_INDICATOR] = ' ';
-		}
-		while (out_col < last) {
-			pline[out_line][out_col++] = ' ';
-		}
-
-#ifdef DEBUG_REPLACE
-		fprintf (stdout, "   NEW pline[%2d] = %s\n", out_line, pline[out_line]);
-#endif
-	}
-}
-
-static void
-reflow_replaced_free_format_text (char *pline[CB_READ_AHEAD],
-				  const int pline_cnt, char *newline,
-				  const int first_col)
-{
-	char	*new_line_ptr;
-	char	new_token[CB_LINE_LENGTH + 2];
-	char	token_terminator[2];
-	int	i;
-	int	j;
-
-	new_line_ptr = get_next_token (newline, new_token, token_terminator);
-
-	for (i = 0; i < pline_cnt; i++) {
-		/*
-		  Terminate the line at null or the first non-space character.
-		*/
-		for (j = first_col; pline[i][j] && pline[i][j] == ' '; j++);
-		pline[i][j] = '\0';
-
-		/*
-		  If the text has not been copied yet, copy it to the start of
-		  the line.
-		*/
-		while (new_line_ptr) {
-			/* TO-DO: Replace with strncat? */
-			strcat (pline[i], new_token);
-			strcat (pline[i], token_terminator);
-			j++;
-			new_line_ptr = get_next_token (new_line_ptr, new_token,
-						       token_terminator);
-		}
-
-		if (j == first_col) {
-			strcat (pline[i], " ");
-		}
-	}
-}
-
-static int
-reflow_replaced_text (const char *cfile_name, char *pline[CB_READ_AHEAD],
-		      int pline_cnt, int line_num, char *newline, int first_col,
-		      int last_col, int fixed)
-{
-	if (fixed) {
-	        reflow_replaced_fixed_format_text (cfile_name, pline,
-						   &pline_cnt, line_num,
-						   newline, first_col,
-						   last_col);
-	} else {
-		reflow_replaced_free_format_text (pline, pline_cnt, newline,
-						  first_col);
-	}
-
-	return pline_cnt;
-}
-
 /* TODO: Modularise! */
-
 static int
 print_replace_text (struct list_files *cfile, FILE *fd,
 		    struct list_replace *rep, char *pline[CB_READ_AHEAD],
 		    int pline_cnt, int line_num)
 {
 	char	*rfp = rep->from;
-	char	*from_ptr;
-	char	*to_ptr;
+	char	*fp;
+	char	*tp;
+	int	i;
+	int	j;
+	int	k = 0;
 	const int	fixed = (cfile->source_format == CB_FORMAT_FIXED);
 	int	first_col = fixed ? CB_MARGIN_A : 0;
 	int	last;
@@ -5896,7 +5092,8 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 	int	overread = 0;
 	int	tokmatch = 0;
 	int	subword = 0;
-	int	ttix, ttlen, from_token_len;
+	int	ttix, ttlen, ftlen;
+	int	nextrec;
 	char	lterm[2];
 	char	fterm[2];
 	char	ftoken[CB_LINE_LENGTH + 2];
@@ -5904,13 +5101,12 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 	char	ttoken[CB_LINE_LENGTH + 2];
 	char	cmp_line[CB_LINE_LENGTH + 2];
 	char	newline[CB_LINE_LENGTH + 2];
-	char	from_line[CB_LINE_LENGTH + 2];
+	char	frm_line[CB_LINE_LENGTH + 2];
 
 	if (is_comment_line (pline[0], fixed)) {
 		return pline_cnt;
 	}
 
-	/* Trim the string to search and replace */
 	terminate_str_at_first_trailing_space (rfp);
 	while (*rfp && isspace (*rfp)) {
 		rfp++;
@@ -5922,7 +5118,7 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 	fprintf (stdout, ", multi_token = %s, fixed = %s\n",
 		 multi_token ? "TRUE" : "FALSE", fixed ? "TRUE" : "FALSE");
 	fprintf (stdout, "   pline_cnt = %d\n", pline_cnt);
-	for (int i = 0; i < pline_cnt; i++) {
+	for (i = 0; i < pline_cnt; i++) {
 		fprintf (stdout, "   pline[%2d]: %s\n", i, pline[i]);
 	}
 	fprintf (stdout, "   rep: first = %d, last = %d, lead_trail = %d\n",
@@ -5942,16 +5138,16 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 		  replaced.
 		*/
 
-		strcpy (from_line, rfp);
-		from_ptr = get_next_token (from_line, ftoken, fterm);
-	force_next_line:
-		to_ptr = get_next_token (cmp_line, ttoken, tterm);
+		strcpy (frm_line, rfp);
+		fp = get_next_token (frm_line, ftoken, fterm);
+	next_line:
+		tp = get_next_token (cmp_line, ttoken, tterm);
 
 		/*
 		  Read tokens until the match is complete or until a match
 		  fails.
 		*/
-		while (to_ptr && from_ptr) {
+		while (tp && fp) {
 			if (!strcasecmp (ttoken, ftoken)) {
 				/*
 				  Mark two tokens as matched, then read next
@@ -5964,8 +5160,8 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 					lterm[0] = tterm[0];
 				}
 				lterm[1] = tterm[1];
-				to_ptr = get_next_token (to_ptr, ttoken, tterm);
-				from_ptr = get_next_token (from_ptr, ftoken, fterm);
+				tp = get_next_token (tp, ttoken, tterm);
+				fp = get_next_token (fp, ftoken, fterm);
 			} else {
 				/* Discard partial match. */
 				if (seccount == 0) {
@@ -5975,13 +5171,13 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 				submatch = 0;
 
 				/* Start matching from beginning of from_line again. */
-				strcpy (from_line, rfp);
-				from_ptr = get_next_token (from_line, ftoken, fterm);
-				to_ptr = get_next_token (to_ptr, ttoken, tterm);
+				strcpy (frm_line, rfp);
+				fp = get_next_token (frm_line, ftoken, fterm);
+				tp = get_next_token (tp, ttoken, tterm);
 				break;
 			}
 		}
-		if (!from_ptr && submatch) {
+		if (!fp && submatch) {
 			/*
 			  If the match is complete, output the match's
 			  replacement.
@@ -5989,12 +5185,13 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 			match = 1;
 			strcat (newline, rep->to);
 			strcat (newline, lterm);
-			if (to_ptr) {
+			if (tp) {
 				strcat (newline, ttoken);
 				strcat (newline, tterm);
-				strcat (newline, to_ptr);
+				strcat (newline, tp);
 			}
-		} else if (!to_ptr && submatch) {
+		}
+		else if (!tp && submatch) {
 			/*
 			  If we run out of chars from the original source, get
 			  more.
@@ -6028,7 +5225,7 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 			if (!is_comment_line (pline[pline_cnt], fixed)) {
 				pline_cnt++;
 			}
-			abort_if_too_many_continuation_lines (pline_cnt, cfile->name, line_num);
+			pline_check_limit (pline_cnt, cfile->name, line_num);
 			if (get_next_listing_line (fd, &pline[pline_cnt], fixed) < 0) {
 				pline[pline_cnt][0] = 0;
 				eof = 1;
@@ -6051,22 +5248,22 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 			last = compare_prepare (cmp_line, pline, pline_cnt - 1, pline_cnt,
 						first_col, fixed);
 			strcat (newline, " ");
-			goto force_next_line;
+			goto next_line;
 		}
 	} else {
-		strcpy (from_line, rfp);
-		from_ptr = get_next_token (from_line, ftoken, fterm);
+		strcpy (frm_line, rfp);
+		fp = get_next_token (frm_line, ftoken, fterm);
 		if (ftoken[0] == ':' || ftoken[0] == '(') {
 			subword = 1;
 		}
-		from_token_len = strlen (ftoken);
+		ftlen = strlen (ftoken);
 
 		/*
 		  For each token in cmp_line, try to match it with the token in
 		  from_line.
 		 */
-		for (to_ptr = get_next_token (cmp_line, ttoken, tterm); to_ptr;
-		     to_ptr = get_next_token (to_ptr, ttoken, tterm)) {
+		for (tp = get_next_token (cmp_line, ttoken, tterm); tp;
+		     tp = get_next_token (tp, ttoken, tterm)) {
 #ifdef DEBUG_REPLACE
 			fprintf (stdout, "   tterm = '%s', ttoken = '%s', ftoken = '%s'\n",
 				 tterm, ttoken, ftoken);
@@ -6076,14 +5273,14 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 			if (rep->lead_trail == CB_REPLACE_LEADING) {
 				subword = 1;
 			} else if (rep->lead_trail == CB_REPLACE_TRAILING) {
-				if (ttlen >= from_token_len) {
+				if (ttlen >= ftlen) {
 					subword = 1;
-					ttix = ttlen - from_token_len;
+					ttix = ttlen - ftlen;
 					ttlen = ttix;
 				}
 			}
 			if (subword) {
-				tokmatch = !strncasecmp (&ttoken[ttix], ftoken, from_token_len);
+				tokmatch = !strncasecmp (&ttoken[ttix], ftoken, ftlen);
 			} else {
 				tokmatch = !strcasecmp (ttoken, ftoken);
 			}
@@ -6091,7 +5288,7 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 				if (subword) {
 					if (rep->lead_trail == CB_REPLACE_LEADING) {
 						strcat (newline, rep->to);
-						strcat (newline, &ttoken[from_token_len]);
+						strcat (newline, &ttoken[ftlen]);
 					} else if (rep->lead_trail == CB_REPLACE_TRAILING) {
 						strncat (newline, ttoken, ttlen);
 						strcat (newline, rep->to);
@@ -6114,16 +5311,93 @@ print_replace_text (struct list_files *cfile, FILE *fd,
 #ifdef DEBUG_REPLACE
 		fprintf (stdout, "   match = TRUE\n   newline = %s\n", newline);
 #endif
-		pline_cnt = reflow_replaced_text (cfile->name, pline, pline_cnt,
-						  line_num, newline, first_col,
-						  last, fixed);
+		if (fixed) {
+			fp = get_next_token (newline, ftoken, fterm);
+			for (j = first_col; (j < last) && isspace (pline[k][j]); j++);
+			if (j >= CB_MARGIN_B) {
+				first_col = CB_MARGIN_B;
+			}
+			for (k = 0; k < pline_cnt; k++) {
+				nextrec = 0;
+				j = first_col;
+				while (fp && !nextrec) {
+					ftlen = strlen (ftoken);
+					i = 0;
+					if (ftlen >= (CB_SEQUENCE - first_col)) {
+#ifdef DEBUG_REPLACE
+						fprintf (stdout, "   ftlen = %d\n", ftlen);
+#endif
+						while (ftlen) {
+							pline[k][j++] = ftoken[i++];
+							ftlen--;
+							if (j == CB_SEQUENCE) {
+#ifdef DEBUG_REPLACE
+								fprintf (stdout, "   NEW pline[%2d] = %s\n",
+									 k, pline[k]);
+#endif
+								j = first_col;
+								k++;
+								if (k == pline_cnt) {
+									pline_check_limit (pline_cnt + 1, cfile->name, line_num);
+									if (pline[pline_cnt + 1] == NULL) {
+	   									pline[pline_cnt + 1] = cobc_malloc (CB_LINE_LENGTH + 2);
+									}
+									strcpy (pline[pline_cnt + 1], pline[pline_cnt]);
+									strcpy (pline[pline_cnt], pline[pline_cnt - 1]);
+									memset (&pline[pline_cnt][CB_MARGIN_A], ' ',
+										CB_SEQUENCE - CB_MARGIN_A);
+									pline[pline_cnt][CB_INDICATOR] = '&';
+									pline_cnt++;
+								}
+							}
+						}
+						pline[k][j++] = ' ';
+					} else {
+						if ((j + 2 + ftlen) < last) {
+							for (i = 0; i < (int)strlen (ftoken); i++)
+								pline[k][j++] = ftoken[i];
+							pline[k][j++] = fterm[0] ? fterm[0] : ' ';
+							if (fterm[0] == '.')
+								pline[k][j++] = ' ';
+						} else {
+							nextrec = 1;
+						}
+					}
+					fp = get_next_token (fp, ftoken, fterm);
+				}
+				if (j == first_col) {
+					pline[k][CB_INDICATOR] = ' ';
+				}
+				while (j < last) {
+					pline[k][j++] = ' ';
+				}
+#ifdef DEBUG_REPLACE
+				fprintf (stdout, "   NEW pline[%2d] = %s\n", k, pline[k]);
+#endif
+			}
+		} else {
+			fp = get_next_token (newline, ftoken, fterm);
+			for (k = 0; k < pline_cnt; k++) {
+				for (j = first_col; pline[k][j] && pline[k][j] == ' '; j++) ;
+				pline[k][j] = 0;
+				while (fp) {
+					strcat (pline[k], ftoken);
+					strcat (pline[k], fterm);
+					j++;
+					fp = get_next_token (fp, ftoken, fterm);
+				}
+				if (j == first_col) {
+					strcat (pline[k], " ");
+				}
+			}
+		}
 	}
 
 	return pline_cnt;
 }
 
 static void
-remove_replace_entries_before_line (struct list_files *cfile, const int line_num)
+free_replace_list (struct list_files *cfile, const int line_num)
 {
 	struct list_replace	*rep;
 
@@ -6131,31 +5405,18 @@ remove_replace_entries_before_line (struct list_files *cfile, const int line_num
 	       && cfile->replace_head->firstline < line_num) {
 		rep = cfile->replace_head;
 		cfile->replace_head = rep->next;
-
-		if (rep->from) {
-			cobc_free (rep->from);
-		}
-		if (rep->to) {
-			cobc_free (rep->to);
-		}
 		cobc_free (rep);
 	}
 }
 
 static void
-deep_copy_list_replace (struct list_replace *src, struct list_files *dst_file)
+copy_list_replace (struct list_replace *src, struct list_files *dst_file)
 {
 	struct list_replace	*copy;
 
 	copy = cobc_malloc (sizeof (struct list_replace));
 	memcpy (copy, src, sizeof (struct list_replace));
 	copy->next = NULL;
-	if (src->to) {
-		copy->to = cobc_strdup (src->to);
-	}
-	if (src->from) {
-		copy->from = cobc_strdup (src->from);
-	}
 
 	if (dst_file->replace_tail) {
 		dst_file->replace_tail->next = copy;
@@ -6166,28 +5427,24 @@ deep_copy_list_replace (struct list_replace *src, struct list_files *dst_file)
 	dst_file->replace_tail = copy;
 }
 
-/* TO-DO: Modularise! */
-/*
-  Applies active REPLACE statements to the source lines in pline. Returns the
-  number of lines after the replacement has been performed.
-*/
+/* TODO: Modularise! */
 static int
 print_replace_main (struct list_files *cfile, FILE *fd,
 		    char *pline[CB_READ_AHEAD], int pline_cnt, int line_num)
 {
-	static int		active_replace_stmt = 0;
-	char			*to_ptr;
+	static int	in_replace = 0;
+	char	*tp;
 	struct list_replace	*rep;
-	struct list_files 	*cur;
-	int    		i;
+	struct list_files *cur;
+	int	i;
 	const int	fixed = (cfile->source_format == CB_FORMAT_FIXED);
 	const int	first_col = fixed ? CB_MARGIN_A : 0;
-	int		is_copy_line;
-	int		is_replace_line;
-	int		is_replace_off = 0;
-	char		tterm[2] = { '\0' };
-	char		ttoken[CB_LINE_LENGTH + 2] = { '\0' };
-	char		cmp_line[CB_LINE_LENGTH + 2] = { '\0' };
+	int	is_copy;
+	int	is_replace;
+	int	is_off;
+	char	tterm[2] = { '\0' };
+	char	ttoken[CB_LINE_LENGTH + 2] = { '\0' };
+	char	cmp_line[CB_LINE_LENGTH + 2] = { '\0' };
 
 	if (is_comment_line (pline[0], cfile->source_format != CB_FORMAT_FREE)) {
 		return pline_cnt;
@@ -6202,24 +5459,19 @@ print_replace_main (struct list_files *cfile, FILE *fd,
 #endif
 
 	compare_prepare (cmp_line, pline, 0, pline_cnt, first_col,
-			 cfile->source_format != CB_FORMAT_FREE);
-
-	/* Check whether we're given a COPY or REPLACE statement. */
-	to_ptr = get_next_token (cmp_line, ttoken, tterm);
-	is_copy_line = !strcasecmp (ttoken, "COPY");
-	is_replace_line = !strcasecmp (ttoken, "REPLACE");
-	if (is_replace_line) {
-		to_ptr = get_next_token (to_ptr, ttoken, tterm);
-		is_replace_off = !strcasecmp (ttoken, "OFF");
+			 cfile->source_format);
+	tp = get_next_token (cmp_line, ttoken, tterm);
+	is_replace = !strcasecmp (ttoken, "REPLACE");
+	is_copy = !strcasecmp (ttoken, "COPY");
+	is_off = 0;
+	if (is_replace) {
+		tp = get_next_token (tp, ttoken, tterm);
+		is_off = !strcasecmp (ttoken, "OFF");
 	}
 
-	/*
-	  If no REPLACE is active, print nothing. If one is active, perform
-	  replacements on the text.
-	*/
-	if (!active_replace_stmt && is_replace_line) {
-		if (!is_replace_off) {
-			active_replace_stmt = 1;
+	if (!in_replace && is_replace) {
+		if (!is_off) {
+			in_replace = 1;
 #ifdef DEBUG_REPLACE
 			for (i = 0, rep = cfile->replace_head; rep; i++, rep = rep->next) {
 				if (rep->firstline < (line_num + 10)) {
@@ -6232,92 +5484,66 @@ print_replace_main (struct list_files *cfile, FILE *fd,
 			}
 #endif
 		}
-	} else if (active_replace_stmt) {
-		if (is_replace_line && is_replace_off) {
-			active_replace_stmt = 0;
-			remove_replace_entries_before_line (cfile, line_num);
-		} else if (is_copy_line) {
-			if (cfile->copy_head) {
-				/* List all lines read so far and then discard them. */
-				for (i = 0; i < pline_cnt; i++) {
-					print_line (cfile, pline[i], line_num + i, 0);
-					pline[i][0] = 0;
-				}
-
-				/* Print copybook, with REPLACE'd text. */
-				cur = cfile->copy_head;
-				if (!cur->replace_head) {
-					for (rep = cfile->replace_head;
-					     rep && rep->firstline <= line_num;
-					     rep = rep->next) {
-					        deep_copy_list_replace (rep, cur);
-					}
-				}
-				print_program_code (cur, 1);
-				cfile->copy_head = cur->next;
-
-				/* Discard copybook reference */
-				if (cur->name) {
-					cobc_free ((char *)cur->name);
-				}
-				cobc_free (cur);
-			}
+	} else if (in_replace) {
+		if (is_replace && is_off) {
+			in_replace = 0;
+			free_replace_list (cfile, line_num);
 		} else {
-			/* Print text with replacements */
-			for (rep = cfile->replace_head;
-			     rep && rep->firstline < line_num;
-			     rep = rep->next) {
-				pline_cnt = print_replace_text (cfile, fd, rep, pline,
-								pline_cnt, line_num);
+			if (is_copy) {
+				if (cfile->copy_head) {
+
+					/* List all lines read so far and then discard them. */
+					for (i = 0; i < pline_cnt; i++) {
+						print_line (cfile, pline[i], line_num + i, 0);
+						pline[i][0] = 0;
+					}
+
+					/* Print copy file */
+					cur = cfile->copy_head;
+					if (!cur->replace_head) {
+						for (rep = cfile->replace_head;
+						     rep && rep->firstline <= line_num;
+						     rep = rep->next) {
+							copy_list_replace (rep, cur);
+						}
+					}
+					print_program_code (cur, 1);
+					cfile->copy_head = cur->next;
+					cobc_free (cur);
+				}
+			} else {
+				for (rep = cfile->replace_head;
+				     rep && rep->firstline < line_num;
+				     rep = rep->next) {
+					pline_cnt = print_replace_text (cfile, fd, rep, pline,
+								       pline_cnt, line_num);
+				}
 			}
 		}
 	}
-
 	return pline_cnt;
 }
 
-static struct list_error *
-list_error_reverse (struct list_error *p)
-{
-	struct list_error	*next;
-	struct list_error	*last;
-
-	last = NULL;
-	for (; p; p = next) {
-		next = p->next;
-		p->next = last;
-		last = p;
-	}
-	return last;
-}
-
-/*
-  Print the listing for the file in cfile, with copybooks expanded and
-  after text has been REPLACE'd.
-
-  This function also frees contents of cfile's copy_head and replace_head
-  members, then sets them to NULL.
-*/
+/* TODO: Modularise! */
 static void
 print_program_code (struct list_files *cfile, int in_copy)
 {
 	FILE			*fd = NULL;
 	struct list_replace	*rep;
+	struct list_replace *repl;
 	struct list_files	*cur;
 	struct list_error	*err;
 	int	i;
-	int	line_num = 1;
+	int	line_num;
 	const int	fixed = (cfile->source_format == CB_FORMAT_FIXED);
-	int	eof = 0;
-	int	pline_cnt = 0;
-	char	*pline[CB_READ_AHEAD] = { NULL };
-	int	lines_read;
+	int	done;
+	int	eof;
+	int	pline_cnt;
+	char	*pline[CB_READ_AHEAD];
+	int	prec;
 
-	if (cfile->err_head) {
-		cfile->err_head = list_error_reverse (cfile->err_head);
-	}
 	cfile->listing_on = 1;
-
+	memset (pline, 0, sizeof(pline));
 #ifdef DEBUG_REPLACE
 	struct list_skip *skip;
 
@@ -6355,33 +5581,39 @@ print_program_code (struct list_files *cfile, int in_copy)
 		fprintf (stdout, "      line[%d]: %d\n", i, skip->skipline);
 	}
 #endif
-
 	if (cfile->name) {
 		fd = fopen (cfile->name, "r");
 	}
 	if (fd != NULL) {
-		abort_if_too_many_continuation_lines (pline_cnt, cfile->name, line_num);
+		line_num = 1;
+		pline_cnt = 0;
+
+		eof = 0;
+		done = 0;
+		pline_check_limit (pline_cnt, cfile->name, line_num);
 		if (get_next_listing_line (fd, &pline[pline_cnt], fixed) >= 0) {
-		        do {
-				abort_if_too_many_continuation_lines (pline_cnt, cfile->name, line_num);
+
+			while (!done) {
+				pline_check_limit (pline_cnt, cfile->name, line_num);
 				if (get_next_listing_line (fd, &pline[pline_cnt + 1], fixed) < 0) {
+					if (eof) {
+						done = 1;
+						break;
+					}
 					eof = 1;
 				}
 				pline_cnt++;
-				lines_read = 0;
-
-				/* Collect all adjacent continuation lines */
+				prec = 0;
 				if (is_continuation_line (pline[fixed ? pline_cnt : pline_cnt - 1],
 							  cfile->source_format != CB_FORMAT_FREE)) {
 					continue;
 				}
-				/* Set line number as specified by #line directive. */
+
 				if (!strncmp (pline[0], "#line ", 6)) {
 					line_num = atoi (&pline[0][6]);
-					lines_read = -1;
+					prec = -1;
 				}
 
-				/* Perform text replacement on the lines. */
 				if (!in_copy) {
 					pline_cnt = print_replace_main (cfile, fd, pline, pline_cnt,
 								       line_num);
@@ -6394,50 +5626,58 @@ print_program_code (struct list_files *cfile, int in_copy)
 					}
 				}
 
-				/* Print each line except the last. */
 				for (i = 0; i < pline_cnt; i++) {
 					if (pline[i][0]) {
-						if (fixed && pline[i][CB_INDICATOR] == '&') {
+						if (pline[i][CB_INDICATOR] == '&') {
 							print_line (cfile, pline[i], line_num, in_copy);
 						} else {
 							print_line (cfile, pline[i], line_num + i, in_copy);
-							lines_read++;
+							prec++;
 						}
 					}
 				}
 
-				/* Output copybooks which are COPY'd at the current line */
-				if (cfile->copy_head
-				    && cfile->copy_head->copy_line == line_num) {
-					/* Add the current text replacements to the copybook */
+				if (cfile->copy_head) {
 					cur = cfile->copy_head;
-					for (rep = cfile->replace_head; rep && in_copy;
-					     rep = rep->next) {
-						deep_copy_list_replace (rep, cur);
+					if (cur->copy_line == line_num) {
+						rep = cfile->replace_head;
+						/*  COPY in COPY, add replacement text to new COPY */
+						while (rep && in_copy) {
+							repl = cobc_malloc (sizeof (struct list_replace));
+							memset (repl, 0, sizeof (struct list_replace));
+							repl->firstline = rep->firstline;
+							repl->lastline = rep->lastline;
+							repl->lead_trail = rep->lead_trail;
+							repl->to = cobc_strdup (rep->to);
+							repl->from = cobc_strdup (rep->from);
+							repl->next = NULL;
+							if (cur->replace_tail) {
+								cur->replace_tail->next = repl;
+							}
+							if (!cur->replace_head) {
+								cur->replace_head = repl;
+							}
+							cur->replace_tail = repl;
+							rep = rep->next;
+						}
+						print_program_code (cur, 1);
+						cfile->copy_head = cur->next;
+						if (cur->name) {
+							cobc_free ((void *)cur->name);
+						}
+						cobc_free (cur);
 					}
-
-					print_program_code (cur, 1);
-
-					/* Delete the copybook reference when done */
-					cfile->copy_head = cur->next;
-					if (cur->name) {
-						cobc_free ((void *)cur->name);
-					}
-					cobc_free (cur);
 				}
-
-				/* Delete all but the last line. */
 				strcpy (pline[0], pline[pline_cnt]);
-				for (i = 1; i < pline_cnt + 1; i++) {
+				for (i = 1; i < pline_cnt+1; i++) {
 				   memset (pline[i], 0, CB_LINE_LENGTH);
 				}
-
-				line_num += lines_read;
+				line_num += prec;
 				pline_cnt = 0;
 				if (pline[0][0] == 0) {
 					eof = 1;
 				}
-			} while (!eof);
+			}
 		}
 		fclose (fd);
 
@@ -6469,22 +5709,28 @@ print_program_code (struct list_files *cfile, int in_copy)
 	}
 
 	/* Free replace data */
-	if (cfile->replace_head) {
-		free_replace_list (cfile->replace_head);
-		cfile->replace_head = NULL;
+	while (cfile->replace_head) {
+		rep = cfile->replace_head;
+		cfile->replace_head = rep->next;
+		if (rep->to) {
+			cobc_free (rep->to);
+		}
+		if (rep->from) {
+			cobc_free (rep->from);
+		}
+		cobc_free (rep);
 	}
 
-	/* Put errors on summary list */
 	while (cfile->err_head) {
 		err = cfile->err_head;
 		cfile->err_head = err->next;
-		if (cb_listing_error_tail) {
-			cb_listing_error_tail->next = err;
+		if (err->prefix) {
+			cobc_free (err->prefix);
 		}
-		if (!cb_listing_error_head) {
-			cb_listing_error_head = err;
+		if (err->msg) {
+			cobc_free (err->msg);
 		}
-		cb_listing_error_tail = err;
+		cobc_free (err);
 	}
 }
 
@@ -6493,13 +5739,14 @@ print_program_code (struct list_files *cfile, int in_copy)
 static void
 print_program_listing (void)
 {
+	/* Print program listing */
 	print_program_code (cb_listing_file_struct, 0);
 
-	print_program_trailer ();
+	/* Print program trailer */
+	print_program_trailer();
 
-	/* TO-DO: Should this be here? */
+	/* Free source name */
 	cobc_free ((void *)cb_listing_file_struct->name);
-	cb_listing_file_struct->name = NULL;
 }
 
 /* Create single-element C source */
@@ -6552,12 +5799,10 @@ process_translate (struct filename *fn)
 	}
 
 	if (ret) {
-		/* If processing raised errors set syntax-only flag to not
-		   loose the information "no codegen occurred" */
-		cb_flag_syntax_only = 1;
 		return 1;
 	}
-	if (cb_flag_syntax_only) {
+	if (cb_flag_syntax_only ||
+		(current_program && current_program->entry_list == NULL)) {
 		return 0;
 	}
 
@@ -6615,8 +5860,7 @@ process_translate (struct filename *fn)
 		cobc_terminate (cb_storage_file_name);
 	}
 
-	current_program = program_list_reverse (current_program);
-	p = current_program;
+	p = program_list_reverse (current_program);
 
 	/* Set up local storage files */
 	lf = NULL;
@@ -6655,19 +5899,12 @@ process_translate (struct filename *fn)
 		}
 	}
 
-	/* Translate to C */
+/* Translate to C */
 	current_section = NULL;
 	current_paragraph = NULL;
 	current_statement = NULL;
 	cb_source_line = 0;
-	/* Temporarily disable cross-reference during C generation */
-	if (cb_listing_xref) {
-		cb_listing_xref = 0;
-		codegen (p, 0);
-		cb_listing_xref = 1;
-	} else {
-		codegen (p, 0);
-	}
+	codegen (p, 0);
 
 	/* Close files */
 	if(unlikely(fclose (cb_storage_file) != 0)) {
@@ -6872,14 +6109,13 @@ process_module_direct (struct filename *fn)
 #endif
 
 	bufflen = cobc_cc_len + cobc_cflags_len
-			+ cobc_include_len + cobc_shared_opt_len
-			+ cobc_pic_flags_len + cobc_export_dyn_len
+			+ cobc_export_dyn_len + cobc_shared_opt_len
 			+ size + fn->translate_len
+			+ cobc_libs_len + cobc_ldflags_len + cobc_include_len
 #ifdef	_MSC_VER
 			+ manilink_len
 #endif
-			+ cobc_ldflags_len + cobc_lib_paths_len + cobc_libs_len
-			+ 128U;
+			+ cobc_lib_paths_len + cobc_pic_flags_len + 128U;
 
 	cobc_chk_buff_size (bufflen);
 
@@ -6889,7 +6125,7 @@ process_module_direct (struct filename *fn)
 		"%s %s %s     /MD  /LD          /Fe\"%s\" /Fo\"%s\" \"%s\" %s %s %s %s",
 			cobc_cc, cobc_cflags, cobc_include, exename, name,
 			fn->translate,
-			manilink, cobc_ldflags, cobc_lib_paths, cobc_libs);
+			manilink, cobc_ldflags, cobc_libs, cobc_lib_paths);
 	if (verbose_output > 1) {
 		ret = process (cobc_buffer);
 	} else {
@@ -6984,15 +6220,13 @@ process_module (struct filename *fn)
 #endif
 
 	size = strlen (name);
-	bufflen = cobc_cc_len
-			+ cobc_shared_opt_len
-			+ cobc_pic_flags_len + cobc_export_dyn_len
-			+ size + fn->object_len
+	bufflen = cobc_cc_len + cobc_ldflags_len
+			+ cobc_export_dyn_len + cobc_shared_opt_len
+			+ size + fn->object_len + cobc_libs_len
 #ifdef	_MSC_VER
 			+ manilink_len
 #endif
-			+ cobc_ldflags_len + cobc_lib_paths_len + cobc_libs_len
-			+ 128U;
+			+ cobc_lib_paths_len + cobc_pic_flags_len + 128U;
 
 	cobc_chk_buff_size (bufflen);
 
@@ -7096,14 +6330,13 @@ process_library (struct filename *l)
 #endif
 
 	size = strlen (name);
-	bufflen = cobc_cc_len + cobc_shared_opt_len
-			+ cobc_pic_flags_len + cobc_export_dyn_len
+	bufflen = cobc_cc_len + cobc_ldflags_len
+			+ cobc_export_dyn_len + cobc_shared_opt_len
 			+ size + cobc_objects_len + cobc_libs_len
 #ifdef	_MSC_VER
 			+ manilink_len
 #endif
-			+ cobc_ldflags_len + cobc_lib_paths_len
-			+ 64U;
+			+ cobc_lib_paths_len + cobc_pic_flags_len + 64U;
 
 	cobc_chk_buff_size (bufflen);
 
@@ -7112,7 +6345,7 @@ process_library (struct filename *l)
 		"%s /Od /MDd /LDd /Zi /FR /Fe\"%s\" %s %s %s %s %s" :
 		"%s     /MD  /LD          /Fe\"%s\" %s %s %s %s %s",
 		cobc_cc, exename, cobc_objects_buffer,
-		manilink, cobc_ldflags, cobc_lib_paths, cobc_libs);
+		manilink, cobc_ldflags, cobc_libs, cobc_lib_paths);
 	if (verbose_output > 1) {
 		ret = process (cobc_buffer);
 	} else {
@@ -7215,13 +6448,13 @@ process_link (struct filename *l)
 #endif
 
 	size = strlen (name);
-	bufflen = cobc_cc_len + cobc_export_dyn_len
-			+ size + cobc_objects_len
+	bufflen = cobc_cc_len + cobc_ldflags_len
+			+ cobc_export_dyn_len + size
+			+ cobc_objects_len + cobc_libs_len
 #ifdef	_MSC_VER
 			+ manilink_len
 #endif
-			+ cobc_ldflags_len + cobc_libs_len + cobc_lib_paths_len
-			+ 64U;
+			+ cobc_lib_paths_len + 64U;
 
 	cobc_chk_buff_size (bufflen);
 
@@ -7230,7 +6463,7 @@ process_link (struct filename *l)
 		"%s /Od /MDd /Zi /FR /Fe\"%s\" %s %s %s %s %s" :
 		"%s     /MD          /Fe\"%s\" %s %s %s %s %s",
 		cobc_cc, exename, cobc_objects_buffer,
-		manilink, cobc_ldflags, cobc_lib_paths, cobc_libs);
+		manilink, cobc_ldflags, cobc_libs, cobc_lib_paths);
 	if (verbose_output > 1) {
 		ret = process (cobc_buffer);
 	} else {
@@ -7443,7 +6676,7 @@ main (int argc, char **argv)
 	p = getenv ("COB_UNIX_LF");
 	if (p && (*p == 'Y' || *p == 'y' ||
 		*p == 'O' || *p == 'o' ||
-		*p == 'T' || *p == 't' ||
+		*p == 'T' || *p == 't' || 
 		*p == '1')) {
 		cb_unix_lf = 1;
 		(void)_setmode (_fileno (stdin), _O_BINARY);
@@ -7497,7 +6730,7 @@ main (int argc, char **argv)
 	iargs = process_command_line (argc, argv);
 
 	cb_text_column = cb_config_text_column;
-
+	
 	/* Check the filename */
 	if (iargs == argc) {
 		cobc_err_exit (_("no input files"));
@@ -7596,7 +6829,7 @@ main (int argc, char **argv)
 	cobc_init_typeck ();
 #endif
 
-	memset (cb_listing_header, 0, sizeof (cb_listing_header));
+	memset (cb_listing_title, 0, sizeof (cb_listing_title));
 	/* If -P=file specified, all lists go to this file */
 	if (cobc_list_file) {
 		if (cb_unix_lf) {
@@ -7609,7 +6842,7 @@ main (int argc, char **argv)
 		}
 	}
 
-	/* internal complete source listing file */
+	/* Open source listing file */
 #ifdef COB_INTERNAL_XREF
 	if (cb_listing_xref && !cb_listing_outputfile) {
 		cobc_err_exit (_("%s option requires a listing file"), "-Xref");
@@ -7640,13 +6873,13 @@ main (int argc, char **argv)
 
 	cobc_cc_len = strlen (cobc_cc);
 	cobc_cflags_len = strlen (cobc_cflags);
+	cobc_libs_len = strlen (cobc_libs);
+	cobc_lib_paths_len = strlen (cobc_lib_paths);
 	cobc_include_len = strlen (cobc_include);
+	cobc_ldflags_len = strlen (cobc_ldflags);
+	cobc_export_dyn_len = strlen (COB_EXPORT_DYN);
 	cobc_shared_opt_len = strlen (COB_SHARED_OPT);
 	cobc_pic_flags_len = strlen (COB_PIC_FLAGS);
-	cobc_export_dyn_len = strlen (COB_EXPORT_DYN);
-	cobc_ldflags_len = strlen (cobc_ldflags);
-	cobc_lib_paths_len = strlen (cobc_lib_paths);
-	cobc_libs_len = strlen (cobc_libs);
 
 	/* Process input files */
 	status = 0;
@@ -7664,45 +6897,34 @@ main (int argc, char **argv)
 
 	/* process all files */
 	for (fn = file_list; fn; fn = fn->next) {
-		current_compile_time = cob_get_current_date_and_time ();
+
+		current_compile_time = cob_get_current_date_and_time();
 
 		/* Initialize listing */
 		if (cb_src_list_file) {
-			set_listing_date ();
-			set_standard_title ();
+			set_listing_date();
 
 			cb_current_file = cb_listing_file_struct;
 			cb_current_file->name = cobc_strdup (fn->source);
 			cb_current_file->source_format = cb_source_format;
-			force_new_page_for_next_line ();
+			force_new_page_for_next_line();
 		}
 
 		/* Initialize general vars */
 		errorcount = 0;
-		cb_source_file = NULL;
-		cb_source_line = 0;
-		current_section = NULL;
-		current_paragraph = NULL;
-		current_program = NULL;
 		cb_id = 1;
 		cb_pic_id = 1;
 		cb_attr_id = 1;
 		cb_literal_id = 1;
 		cb_field_id = 1;
 		demangle_name = fn->demangle_source;
-		memset (optimize_defs, 0, sizeof (optimize_defs));
+		memset (optimize_defs, 0, sizeof(optimize_defs));
 
 		iparams++;
 		if (iparams > 1 && cb_compile_level == CB_LEVEL_EXECUTABLE) {
 			local_level = cb_compile_level;
 			cb_compile_level = CB_LEVEL_ASSEMBLE;
 			cobc_flag_main = 0;
-		}
-
-		if (cb_src_list_file) {
-			cb_listing_page = 0;
-			strcpy (cb_listing_filename, fn->source);
-			set_listing_header_code ();
 		}
 
 
@@ -7719,6 +6941,12 @@ main (int argc, char **argv)
 
 		if (cobc_list_file) {
 			putc ('\n', cb_listing_file);
+		}
+
+		if (cb_src_list_file) {
+			cb_listing_page = 0;
+			strcpy (cb_listing_filename, fn->source);
+			set_listing_title_code();
 		}
 
 		if (cb_compile_level < CB_LEVEL_TRANSLATE) {

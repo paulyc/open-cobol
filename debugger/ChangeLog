@@ -1,0 +1,44 @@
+
+2016-11-11  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* testprog2.cob: added occurs / lvl88 to the sample
+	* breakpoints.cpy, gc-debugger.cob: multiple fixes
+	* view-variable.cpy: early exit if no parameter given;
+	  delimit varname by spaces (fixme [table, refmod])
+
+2016-11-08  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* Makefile.am: fixed to include copies as dependencies for gc-debugger.cob
+	  and included them in the dist target
+	* breakpoints.cpy: fixed implicit "Overlapping MOVE" in "READ bp-file"
+
+2016-07-02  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* general: only enable logging code if ENABLE-LOGGING defined
+	  (still checks COB_ANIM_LOGGING at run-time to be activated)
+	* gc-debugger.cob, watchpoints.cpy: store number of watchpoints in wp-count
+	  for leaving PERFORMs early
+	* helpers.cpy: check for "STOP" and " RUN" instead of "STOP RUN."
+
+2016-06-25  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* helpers.cpy: use STATIC CALL for 'string_contains'
+
+2015-??-??  Philipp Böhme <phi.boehme@googlemail.com>
+
+	* gc-debugger.cob: heavily updated, added fulltext-search and watchpoints,
+	  moved different sections to copybooks: screen, breakpoints,
+	  view-variable
+	* breakpoints.cpy, fulltext-search.cpy, helpers.cpy, logging.cpy,
+	  screen.cpy, view-variable.cpy, watchpoints.cpy: added
+	* animod.cob, printani.cob: removed
+
+2014-12-07  Philipp Böhme <phi.boehme@googlemail.com>
+
+	* gc-debugger.cob: updated
+
+2014-12-01  Philipp Böhme <phi.boehme@googlemail.com>
+
+	* gc-debugger.cob, animod.cob, printani.cob: first version of 
+	  animator program (inspired by Ed Borchert & Ronald Heirbaut;
+	  Federico Priolo)

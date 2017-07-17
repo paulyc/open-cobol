@@ -106,29 +106,27 @@ enum cb_format {
 
 /* Context sensitive keyword defines (trigger words) */
 #define	CB_CS_ACCEPT			(1U << 0)
-#define CB_CS_ALLOCATE			(1U << 1)
-#define	CB_CS_ALPHABET			(1U << 2)
-#define	CB_CS_ASSIGN			(1U << 3)
-#define	CB_CS_CALL			(1U << 4)
-#define	CB_CS_CONSTANT			(1U << 5)
-#define	CB_CS_DATE			(1U << 6)
-#define	CB_CS_DAY			(1U << 7)
-#define	CB_CS_DISPLAY			(1U << 8)
-#define	CB_CS_ERASE			(1U << 9)
-#define	CB_CS_EXIT			(1U << 10)
-#define	CB_CS_FROM			(1U << 11)
-#define	CB_CS_OCCURS			(1U << 12)
-#define CB_CS_OPTIONS			(1U << 13)
-#define	CB_CS_PERFORM			(1U << 14)
-#define	CB_CS_PROGRAM_ID		(1U << 15)
-#define	CB_CS_READ			(1U << 16)
-#define	CB_CS_RECORDING			(1U << 17)
+#define	CB_CS_ALPHABET			(1U << 1)
+#define	CB_CS_ASSIGN			(1U << 2)
+#define	CB_CS_CALL			(1U << 3)
+#define	CB_CS_CONSTANT			(1U << 4)
+#define	CB_CS_DATE			(1U << 5)
+#define	CB_CS_DAY			(1U << 6)
+#define	CB_CS_DISPLAY			(1U << 7)
+#define	CB_CS_ERASE			(1U << 8)
+#define	CB_CS_EXIT			(1U << 9)
+#define	CB_CS_FROM			(1U << 10)
+#define	CB_CS_PROGRAM_ID		(1U << 11)
+#define	CB_CS_ROUNDED			(1U << 12)
+#define	CB_CS_SET			(1U << 13)
+#define	CB_CS_STOP			(1U << 14)
+#define	CB_CS_WITH			(1U << 15)
+#define	CB_CS_RECORDING			(1U << 16)
+#define	CB_CS_PERFORM			(1U << 17)
 #define	CB_CS_RETRY			(1U << 18)
-#define	CB_CS_ROUNDED			(1U << 19)
-#define	CB_CS_SET			(1U << 20)
-#define	CB_CS_STOP			(1U << 21)
-#define	CB_CS_WITH			(1U << 22)
-#define	CB_CS_OBJECT_COMPUTER		(1U << 23)
+#define	CB_CS_READ			(1U << 19)
+#define	CB_CS_OCCURS		(1U << 20)
+#define CB_CS_ALLOCATE		(1U << 21)
 
 /* Support for cobc from stdin */
 #define COB_DASH			"-"
@@ -155,11 +153,6 @@ enum cb_support {
 	CB_UNCONFORMABLE
 };
 
-#define COBC_WARN_FILLER  -1
-#define COBC_WARN_DISABLED 0
-#define COBC_WARN_ENABLED  1
-#define COBC_WARN_AS_ERROR 2
-
 /* Config dialect support types */
 enum cb_std_def {
 	CB_STD_OC = 0,
@@ -168,7 +161,6 @@ enum cb_std_def {
 	CB_STD_MVS,
 	CB_STD_BS2000,
 	CB_STD_ACU,
-	CB_STD_RM,
 	/* the following must contain ANSI/ISO standards in order */
 	CB_STD_85,
 	CB_STD_2002,
@@ -259,7 +251,6 @@ enum cobc_name_type {
 struct list_error {
 	struct list_error	*next;
 	int			line;		/* Line number for error */
-	char			*file;		/* File name */
 	char			*prefix;	/* Error prefix */
 	char			*msg;		/* Error Message text */
 };
@@ -284,8 +275,11 @@ struct list_skip {
 struct list_files {
 	struct list_files	*next;
 	struct list_files	*copy_head;	/* COPY book list head */
+#if 0 /* lstings - doesn't seem to be used */
 	struct list_files	*copy_tail;	/* COPY book list tail */
+#endif
 	struct list_error	*err_head;	/* Error message list head */
+	struct list_error	*err_tail;	/* Error message list tail */
 	struct list_replace	*replace_head;	/* REPLACE list head */
 	struct list_replace	*replace_tail;	/* REPLACE list tail */
 	struct list_skip	*skip_head;	/* Skip list head */
@@ -366,6 +360,7 @@ extern int			cobc_flag_main;
 extern int			cb_flag_functions_all;
 extern int			cb_flag_main;
 extern int			cobc_wants_debug;
+extern int			cobc_wants_anim;
 extern int			cb_listing_xref;
 extern int			cobc_seen_stdin;
 
@@ -408,7 +403,6 @@ extern struct cb_label		*current_paragraph;
 extern int			cb_exp_line;
 extern int			functions_are_all;
 extern struct cb_tree_common	*defined_prog_list;
-extern int			current_call_convention;
 
 /* Functions */
 
@@ -468,7 +462,6 @@ extern enum				cb_support var;
 extern int		cb_load_std (const char *);
 extern int		cb_config_entry (char *, const char *, const int);
 extern int		cb_load_conf (const char *, const int);
-extern int		cb_load_words (void);
 
 #ifndef	HAVE_DESIGNATED_INITS
 /* Initialization routines in typeck.c and reserved.c */
@@ -494,8 +487,6 @@ extern void		pp_set_replace_list (struct cb_replace_list *,
 					     const cob_u32_t);
 extern void		ppparse_error (const char *);
 extern void		ppparse_clear_vars (const struct cb_define_struct *);
-extern struct cb_define_struct *ppp_search_lists (const char *name);
-extern void		ppp_clear_lists (void);
 extern void		plex_clear_vars (void);
 extern void		plex_clear_all (void);
 extern void		plex_call_destroy (void);
@@ -503,6 +494,8 @@ extern void		plex_action_directive (const unsigned int,
 					       const unsigned int);
 
 /* parser (in scanner.l, parser.y) */
+extern char		*cobc_glob_line;
+
 #if	!defined (COB_IN_SCANNER ) && !defined (COB_IN_PPLEX) && \
 	!defined (COB_IN_PPPARSE)
 extern FILE		*yyin;
@@ -527,26 +520,24 @@ extern void		cob_gen_optim (const enum cb_optim);
 #define CB_MSG_STYLE_GCC	0
 #define CB_MSG_STYLE_MSC	1U
 
-#define CB_PENDING(x) \
-	do { cb_warning (cb_warn_pending, _("%s is not implemented"), x); } ONCE_COB
-#define CB_PENDING_X(x,y) \
-	do { cb_warning_x (cb_warn_pending, x, _("%s is not implemented"), y); } ONCE_COB
-#define CB_UNFINISHED(x) \
-	do { cb_warning (cb_warn_unfinished, \
-		_("handling of %s is unfinished; implementation is likely to be changed"), x); \
-	} ONCE_COB
-#define CB_UNFINISHED_X(x,y) \
-	do { cb_warning_x (cb_warn_unfinished, x, \
-		_("handling of %s is unfinished; implementation is likely to be changed"), y); \
-	} ONCE_COB
+#define CB_PENDING(x)		cb_warning (_("%s is not implemented"), x)
+#define CB_PENDING_X(x,y)		cb_warning_x (x, _("%s is not implemented"), y)
+#define CB_UNFINISHED(x)		\
+	do {if (cb_warn_unfinished) {\
+		cb_warning (_("handling of %s is unfinished; implementation is likely to be changed"), x);\
+	}} while (0)
+#define CB_UNFINISHED_X(x,y)	\
+	do {if (cb_warn_unfinished) {\
+		cb_warning_x (x, _("handling of %s is unfinished; implementation is likely to be changed"), y);\
+	}} while (0)
 
 extern size_t		cb_msg_style;
 
-extern void		cb_warning (int, const char *, ...) COB_A_FORMAT23;
+extern void		cb_warning (const char *, ...) COB_A_FORMAT12;
 extern void		cb_error (const char *, ...) COB_A_FORMAT12;
 extern void		cb_perror (const int, const char *, ...) COB_A_FORMAT23;
-extern void		cb_plex_warning (int, const size_t,
-					 const char *, ...) COB_A_FORMAT34;
+extern void		cb_plex_warning (const size_t,
+					 const char *, ...) COB_A_FORMAT23;
 extern void		cb_plex_error (const size_t,
 					 const char *, ...) COB_A_FORMAT23;
 extern unsigned int	cb_plex_verify (const size_t, const enum cb_support,
@@ -565,14 +556,5 @@ extern struct reserved_word_list	*cobc_user_res_list;
 
 extern void		remove_reserved_word (const char *, const char *, const int);
 extern void		add_reserved_word (const char *, const char *, const int);
-
-extern void		remove_register (const char *, const char *, const int);
-extern void		add_register (const char *, const char *, const int);
-
-extern void		deactivate_intrinsic (const char *, const char *, const int);
-extern void		activate_intrinsic (const char *, const char *, const int);
-
-extern void		deactivate_system_name (const char *, const char *, const int);
-extern void		activate_system_name (const char *, const char *, const int);
 
 #endif /* CB_COBC_H */

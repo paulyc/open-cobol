@@ -2,7 +2,7 @@
 # Configure template for GnuCOBOL
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2001-2012, 2014-2017 Free Software Foundation, Inc.
+# Copyright (C) 2001-2012, 2014-2016 Free Software Foundation, Inc.
 # Written by Keisuke Nishida, Roger While, Ron Norman, Simon Sobisch
 #
 # This file is part of GnuCOBOL.
@@ -54,6 +54,7 @@ if echo $CFLAGS | grep 'aix64' 1>/dev/null 2>&1; then
 fi
 
 AM_INIT_AUTOMAKE([gnu no-texinfo.tex])
+AM_MAINTAINER_MODE
 
 # Autoheader templates
 AH_TEMPLATE([COB_EXPERIMENTAL], [Enable experimental code (Developers only!)])
@@ -91,7 +92,6 @@ AH_TEMPLATE([HAVE_USE_LEGACY_CODING], [ncurses has use_legacy_coding function])
 AH_TEMPLATE([HAVE_DESIGNATED_INITS], [Has designated initializers])
 AH_TEMPLATE([HAVE_NANO_SLEEP], [Has nanosleep function])
 AH_TEMPLATE([HAVE_CLOCK_GETTIME], [Has clock_gettime function and CLOCK_REALTIME])
-AH_TEMPLATE([HAVE_ISFINITE], [Has isfinite function])
 AH_TEMPLATE([HAVE_MP_GET_MEMORY_FUNCTIONS], [Do we have mp_get_memory_functions in gmp])
 #AH_TEMPLATE([HAVE_RAISE], [Has raise function])
 AH_TEMPLATE([HAVE_FINITE_IEEEFP_H],
@@ -100,13 +100,15 @@ AH_TEMPLATE([HAVE_FINITE_IEEEFP_H],
 save_libs="$LIBS"
 
 enable_cflags_setting=no
-AC_MSG_CHECKING([whether CFLAGS can be modified])
-# Enable setting if the user has not specified the optimisation in CFLAGS.
-echo "$CFLAGS" | grep "\-O.*\( \|$\)" 1>/dev/null 2>/dev/null
-if test $? != 0; then
-	enable_cflags_setting=yes
+if test "$enable_debug" = "yes"; then
+	AC_MSG_CHECKING([whether CFLAGS can be modified])
+	# Enable setting if the user has not specified the optimisation in CFLAGS.
+	echo "$CFLAGS" | grep "\-O.*\( \|$\)" 1>/dev/null 2>/dev/null
+	if test $? != 0; then
+		enable_cflags_setting=yes
+	fi
+	AC_MSG_RESULT([$enable_cflags_setting])
 fi
-AC_MSG_RESULT([$enable_cflags_setting])
 
 # Configure options part I (not needing any compilation)
 
@@ -183,10 +185,6 @@ LT_INIT([dlopen win32-dll])
 
 AC_PROG_EGREP
 AM_PROG_CC_C_O
-
-AM_PROG_LEX
-AC_PROG_YACC
-
 # Stop tests for C++ and Fortran
 AC_DEFUN([AC_PROG_F77], [])
 AC_DEFUN([AC_PROG_CXX], [])
@@ -244,26 +242,11 @@ AC_CHECK_FUNCS([memmove memset setlocale fcntl strerror strcasecmp \
 	readlink getexecname canonicalize_file_name realpath \
 	strcoll strxfrm setenv raise])
 
-# Checks for UTC offset (init)
-COB_HAS_UTC_OFFSET="no"
-
-AC_RUN_IFELSE([AC_LANG_PROGRAM([[]], [[
-	#ifdef _BSD_SOURCE
-	return 0;
-	#else
-	return 1;
-	#endif]])],
-	[COB_HAS_UTC_OFFSET="yes"],
-	[],
-	[])
-
 # Check for timezone
 AC_MSG_CHECKING([for timezone variable access])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <time.h>]],
 	[[timezone = 3600;]])],
-	[AC_DEFINE([HAVE_TIMEZONE], [1])
-		COB_HAS_UTC_OFFSET="yes"
-		AC_MSG_RESULT([yes])],
+	[AC_DEFINE([HAVE_TIMEZONE], [1]) AC_MSG_RESULT([yes])],
 	[AC_MSG_RESULT([no])])
 
 # Check for designated initializers
@@ -344,19 +327,12 @@ AC_RUN_IFELSE([AC_LANG_PROGRAM([[]], [[
 	[COB_USES_WATCOMC_ONLY=yes],
 	[],
 	[])
-
+                                      
 COB_CC="$CC"
 if test "$COB_USES_ICC_ONLY" = "yes"; then
 	LIBCOB_LIBS="-limf -lm"
 else
 	LIBCOB_LIBS="-lm"
-fi
-
-# Add --enable-code-coverage and test for code-coverage tools if enabled
-AX_CODE_COVERAGE
-
-if test "$COB_USES_GCC_NO_ICC" != yes -a "$enable_code_coverage" = "yes"; then
-	AC_MSG_ERROR([Code coverage checks are only usable with GCC!])
 fi
 
 
@@ -543,7 +519,7 @@ AC_MSG_CHECKING([matching GMP version])
 COB_GMP_LIB_MAJOR=$(echo "$COB_GMP_LIB" | cut -d. -f1)
 COB_GMP_LIB_MINOR=$(echo "$COB_GMP_LIB" | cut -d. -f2)
 
-if test "$COB_GMP_HEADER" = "$COB_GMP_LIB_MAJOR.$COB_GMP_LIB_MINOR"; then
+if test "$COB_GMP_HEADER" == "$COB_GMP_LIB_MAJOR.$COB_GMP_LIB_MINOR"; then
 	AC_MSG_RESULT([yes ($COB_GMP_HEADER)])
 else
 	AC_MSG_RESULT([no (header: $COB_GMP_HEADER / library: $COB_GMP_LIB)])
@@ -582,12 +558,6 @@ AC_MSG_CHECKING([for clock_gettime and CLOCK_REALTIME])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <time.h>]],
   [[clock_gettime (CLOCK_REALTIME, NULL);]])],
   [AC_DEFINE([HAVE_CLOCK_GETTIME], [1]) AC_MSG_RESULT([yes])],
-  [AC_MSG_RESULT([no])])
-
-AC_MSG_CHECKING([for isfinite ])
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]],
-  [[isfinite ( 1.0 );]])],
-  [AC_DEFINE([HAVE_ISFINITE], [1]) AC_MSG_RESULT([yes])],
   [AC_MSG_RESULT([no])])
 
 # Check for raise (optional) --> done via AC_CHECK_FUNCS
@@ -797,29 +767,22 @@ if test "$with_db" = "yes"; then
 
 	# BDB header exists. Extract major/minor number pair
 	COB_BDB_HEADER=''
-	COB_BDB_HEADER_STR=''
 	AC_RUN_IFELSE([AC_LANG_SOURCE([[
 		#include <stdio.h>
 		#include <db.h>
 		int main (int argc, char **argv)
 		{
 			(void)argv;
-			if (argc == 2)
+			if (argc > 1)
 				printf ("%d.%d\n", DB_VERSION_MAJOR, DB_VERSION_MINOR);
-			if (argc == 3)
-				printf ("-%s-\n", DB_VERSION_STRING);
 			return 0;
 		}
 		]])],
-		[COB_BDB_HEADER=`./conftest$ac_exeext x`]
-		[COB_BDB_HEADER_STR=`./conftest$ac_exeext x y`],
+		[COB_BDB_HEADER=`./conftest$ac_exeext x`],
 		[AC_MSG_ERROR([Unable to extract Berkeley DB version information from db.h])],
 		[])
 	if test "x$COB_BDB_HEADER" = "x"; then
 		AC_MSG_ERROR([Unable to extract Berkeley DB version information])
-	fi
-	if test "x$COB_BDB_HEADER_STR" != "x"; then
-		AC_MSG_NOTICE([db.h reports version "$COB_BDB_HEADER_STR"])
 	fi
 	AC_MSG_CHECKING([for Berkeley DB db.h version >= 4.1])
 	COB_BDB_HEADER_MAJOR=$(echo "$COB_BDB_HEADER" | cut -d. -f1)
@@ -837,9 +800,7 @@ if test "$with_db" = "yes"; then
 	MYOLDLIBS="$LIBS"
 	cob_got_db=no
 	AC_MSG_CHECKING([for Berkeley DB library with version $COB_BDB_HEADER])
-	# prefer library with version number included as some systems link against s wrong version
-	# of the library and to not break when a newer BDB version is installed, see bug #100
-	for cobdb in db-$COB_BDB_HEADER db
+	for cobdb in db db-$COB_BDB_HEADER
 	do
 		LIBS="$MYOLDLIBS -l$cobdb"
 		AC_RUN_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>
@@ -930,9 +891,7 @@ AC_RUN_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>
 		return 1;
 	}
 	return 0;]])],
-	[AC_DEFINE([COB_STRFTIME], [1])
-		COB_HAS_UTC_OFFSET="yes"
-		AC_MSG_RESULT([yes])],
+	[AC_DEFINE([COB_STRFTIME], [1]) AC_MSG_RESULT([yes])],
 	[AC_MSG_RESULT([no])],
 	[])
 
@@ -1019,19 +978,16 @@ COB_EXPORT_DYN="`eval echo $export_dynamic_flag_spec`"
 COB_PIC_FLAGS=`echo "$lt_prog_compiler_pic" | sed -e 's/^ //'`
 COB_SHARED_OPT="-shared"
 
-if test "$enable_cflags_setting" = "yes"; then
-
+if test "$enable_cflags_setting" = yes; then
 	# Remove -O2 option added by AC_PROG_CC and add -O0
-	if test "$enable_debug" = "yes" -o "$enable_code_coverage" = "yes"; then
-		CFLAGS=`echo "$CFLAGS" | sed -e 's/ *-O@<:@0-9a-zA-Z@:>@* */ /g' -e 's/ $//' -e 's/^ //'`
-		if test "$COB_USES_GCC" = "yes"; then
-			CFLAGS="$CFLAGS -O0"
-		fi
+	CFLAGS=`echo "$CFLAGS" | sed -e 's/ *-O@<:@0-9a-zA-Z@:>@* */ /g' -e 's/ $//' -e 's/^ //'`
+	if test "$COB_USES_GCC" = "yes"; then
+		CFLAGS="$CFLAGS -O0"
 	fi
 
-	# For debugging: add -g3 if using GCC.
-	if test "$enable_debug" = "yes" -a "$COB_USES_GCC" = "yes"; then
-		MYOLDCFLAGS="$CFLAGS"
+	# Add -g3 if using GCC.
+	if test "$COB_USES_GCC" = "yes"; then
+		MYOLDCFLAGS="$CFLAGS"		     
 		CFLAGS="$CFLAGS -g3"
 		AC_MSG_CHECKING([for gcc -g3 option])
 		AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[int testint;]])],
@@ -1044,7 +1000,7 @@ fi
 unset enable_cflags_setting
 
 if test "$enable_debug" != "yes" -a "x$CFLAGS" != "x"; then
-	CFLAGS=`echo "$CFLAGS" | sed -e 's/-g3//' -e 's/-g//' -e 's/^ //' -e 's/ $//'`
+	CFLAGS=`echo "$CFLAGS" | sed -e 's/-g//' -e 's/-g3//' -e 's/^ //' -e 's/ $//'`
 fi
 
 if test "$COB_USES_GCC" = "yes"; then
@@ -1054,6 +1010,7 @@ if test "$COB_USES_GCC" = "yes"; then
 		CFLAGS="-pipe"
 	fi
 fi
+
 
 # include directory (install dir)
 
@@ -1131,7 +1088,7 @@ if test "x$CPPFLAGS" != "x"; then
 	fi
 fi
 if test "x$cob_temp_flags" != "x"; then
-	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-g3//' -e 's/-g//' -e 's/ $//' -e 's/^ //'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-g//' -e 's/-g3//' -e 's/ $//' -e 's/^ //'`
 	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/@<:@+-@:>@O@<:@0-9s@:>@//' -e 's/ $//' -e 's/^ //'`
 	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-O//' -e 's/ $//' -e 's/^ //'`
 	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fmessage-length=0//'`
@@ -1314,6 +1271,11 @@ AC_SUBST([COB_FIX_LIBTOOL])
 AC_SUBST([COB_KEYWORD_INLINE])
 AC_SUBST([COB_HAS_ISAM])
 AC_SUBST([COB_HAS_CURSES])
+if test "$COB_STRFTIME" = "no" -a "$COB_TIMEZONE" = "no"; then
+	COB_HAS_UTC_OFFSET="no"
+else
+	COB_HAS_UTC_OFFSET="yes"
+fi
 AC_SUBST([COB_HAS_UTC_OFFSET])
 AC_SUBST([COB_PATCH_LEVEL], [$with_patch_level]) # needed for bin/cob-config
 
@@ -1321,14 +1283,12 @@ AC_CONFIG_FILES([bin/cob-config Makefile libcob/Makefile lib/Makefile
 	cobc/Makefile bin/Makefile po/Makefile.in doc/Makefile
 	config/Makefile copy/Makefile
 	tests/atlocal tests/Makefile tests/cobol85/Makefile
-	extras/Makefile])
+	extras/Makefile debugger/Makefile])
 
 AC_CONFIG_COMMANDS([chmod],
 [chmod +x bin/cob-config;
 chmod +x tests/atconfig;
 chmod +x tests/atlocal])
-
-AM_MISSING_PROG([HELP2MAN], [help2man])
 
 AC_OUTPUT
 

@@ -1,177 +1,4 @@
 
-2017-07-16  Edward Hart <edward.dan.hart@gmail.com>
-
-	* exception.def: update to COBOL 2014 and added finalizer exception.
-
-2017-07-12  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* fileio.c: checked the now optional sort-return before accessing it
-
-2017-06-16  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* Makefile.am: added CODE_COVERAGE parts as provided by AX_CODE_COVERAGE
-	* general:
-	  surrounded exception ABORTs that cannot be tested by LCOV_EXCP markers
-
-2017-06-04  Ron Norman <rjn@inglenet.com>
-
-	* common.c: Improved 'cobcrun -r' display for when
-	  unsetenv is used in runtime.cfg to show environment variable
-	  was removed and runtime.cfg variable was then present
-
-2017-05-26  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* system.def: replaced misleading name C$PRINTABLE (OC-extension,
-	  not a C$ -> ACUCOBOL extension!) by CBL_GC_PRINTABLE (old name
-	  still supported for legacy reasons)
-
-2017-05-22  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c: renamed cob_get_current_date_and_time to
-	  cob_get_current_date_and_time_from_os
-	* common.c, coblocal.c: store datetime from COB_CURRENT_DATE as
-	  cob_time and check for this in cob_get_current_date_and_time
-	  instead of in every function
-	* common.c: allow partial replace of datetime (including offset only)
-	  by COB_CURRENT_DATE
-
-2017-05-24  Edward Hart <edward.dan.hart@gmail.com>
-
-	* common.c: fixed minor style issues, mostly missing spaces around
-	  operators.
-
-2017-05-22  Ron Norman <rjn@inglenet.com>
-
-	* termio.c (pretty_display_numeric):  handle
-	  SIGN_SEPARATE  TRAILING & LEADING
-
-2017-05-18  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* system.def: added maximum call parameters for system library calls
-
-2017-05-14  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* fileio.c: correctly update file status for DELETE FILE statement
-	  (we always returned 00 until now)
-	* fileio.c:
-
-2017-05-13  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* screenio.c (cob_move): return the status returned by (move)
-	* screenio.c: FR #191 only set flag pending_accept when cob_move
-	  returns no error
-
-2017-05-12  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c (cob_sys_oc_nanosleep): prefer HAVE_NANO_SLEEP over _WIN32
-
-2017-05-11  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* screenio.c (screen_display): FR #191 set flag pending_accept
-	  for DISPLAY screen, too
-
-2017-05-01  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c (cob_sig_handler, cob_set_signal): added code for SIGBUS
-	  in correspondence to SIGSEGV code
-
-2017-04-28  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c (set_value, get_value): using correcting format modifier
-	  for cob_s64_t (CB_FMT_LLD)
-
-2017-04-27  Sergey Kashyrin <ska@kiska.net>
-
-	* common.c (set_value, get_value): changed type long to cob_s64_t
-	  as SORT was broken on Windows
-
-2017-04-23  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.h: always use COB_KEYWORD_INLINE (set by configure)
-	  for COB_INLINE
-
-2017-04-18 Ron Norman <rjn@inglenet.com>
-
-	* numeric.c, common.c, coblocal.h: define ISFINITE depending on
-	  HAVE_ISFINITE to either use 'isfinite' or 'finite' or '_finite'
-
-2017-04-10  Brian Tiffin <btiffin@gnu.org>
-
-	* common.c, common.h: remove cob_get_prog_pointer in preference to
-	  cob_get_pointer.
-
-2017-04-08  Edward Hart <edward.dan.hart@gmail.com>
-
-	* intrinsic.c (in_last_n_chars): fixed underflow when field->size was
-	  less than n, ultimately causing an invalid read.
-	* fileio.c (indexed_open): fixed minor memory leak.
-
-2017-03-31  Edward Hart <edward.dan.hart@gmail.com>
-
-	* intrinsic.c: fixed minor buffer overflows in the formatted-date
-	  functions (see bug #357).
-
-2017-03-19  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c (cob_chain_setup): only set field's value if given on
-	  command line, preserve program internal initialization otherwise
-
-2017-03-18  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c (cob_module_enter): set cob_call_params from argc
-	  for main programs
-	* common.c (cob_chain_setup): don't set cob_call_params any more
-	* common.c [_MSC_VER] (cob_get_current_date_and_time):
-	  silence wrong warning 6011
-
-2017-03-12  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c: fix minor memory leaks in configuration code
-
-2017-02-07  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* screenio.c: [!COB_GEN_SCREENIO] fixed zero_line_col_allowed
-	  missing / superfluous in function declarations
-
-2017-02-06  Ron Norman <rjn@inglenet.com>
-
-	* common.c, common.h:
-	  added cob_module_free so that structure gets freed within libcob
-	* fileio.c, common.h:
-	  Added new routines cob_file_external_addr,cob_file_malloc,cob_file_free
-	  so that 'cob_file' is allocated within libcob
-	  This will allow the stucture have fields added to the end
-	  without forcing a recompile.
-
-2017-02-05  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c, common.h, call.c: [__MINGW32__] fixes for mixed printf
-	  format modifiers for long long
-	* common.c: [WIN32] check if PROCESS_QUERY_LIMITED_INFORMATION is
-	  actually defined (not the case for MINGW and old VC versions)
-
-2017-01-18  Ron Norman <rjn@inglenet.com>
-
-	* call.c (cob_get_param_type): added check for COB_FIELD_REAL_BINARY
-
-2017-01-17  Ron Norman <rjn@inglenet.com>
-
-	* call.c: added code to handle default data field types by using cob_move
-	* move.c: added missing cob_put_s64_compx routine
-
-2017-01-10  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c: Copyright year 2017
-
-2017-01-10  Ron Norman <rjn@inglenet.com>
-
-	* move.c, call.c, common.h: New routines added to provide
-	  application C code access to COBOL data fields.
-
-2017-01-09  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.h, common.c (cob_check_subscript): corrected minimum check
-
 2017-01-05  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
 	* screenio.c (field_accept): don't write anything on the screen for
@@ -191,12 +18,6 @@
 	* common.h: extended cob_time with is_daylight_saving_time and day_of_year
 	* common.c [_BSD_SOURCE]: get utc_offset directly from tm_gmtoff
 
-2017-01-01  Ron Norman <rjn@inglenet.com>
-
-	* fileio.c (cob_read_next): change to return 46 on 2nd read on an optional
-	  missing file, removed some redundant code
-	* fileio.c [WITH_DB]: moved call to join_environment to indexed_open
-
 2016-12-27  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
 	* common.h: added COB_MAX_UNBOUNDED_SIZE
@@ -204,7 +25,7 @@
 	  returned when requested to allocate more than the maximum possible size
 	* common.h, common.c (cob_check_odo, cob_check_subscript): additional
 	  parameters for table name in DEPENDING ON and flag for ODO, additional
-	  runtime error line with the (current) maximum of the table
+	  runtime error line with the (current) minimum/maximum of the table
 
 2016-12-26  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
@@ -215,6 +36,8 @@
 	  position, (cob_get_char) / cobgetch to get a single character or
 	  function key, (cob_get_text) to get a text input and function keys with
 	  a given size from current cursor position
+	* screenio.c, common.h, system.def: renamed cob_sys_get_csr_pos /
+	  CBL_GET_CSR_POS to cob_sys_get_scr_pos / CBL_GET_SCR_POS
 	* screenio.c, common.h, system.def: added system routine
 	  CBL_PUT_SCR_POS / cob_sys_put_scr_pos to set the cursor position
 	  and for compatibility: CBL_READ_KBD_CHAR / cob_sys_get_char to get
@@ -299,21 +122,9 @@
 	* common.h: re-fixed COB_ONCE for MSC
 	* system.def: replaced octal by hex strings for hex-system routines
 
-2016-11-07  Ron Norman <rjn@inglenet.com>
-
-	* move.c, common.h: added cob_move_ibm function for 'move-ibm'
-
-2016-10-13  Ron Norman <rjn@inglenet.com>
-
-	* numeric.c, common.h: added cob_decimal_align function for 'arithemtic-osvs'
-
 2016-10-02  Edward Hart <edward.dan.hart@gmail.com>
 
 	* common.h: added cob_flags_t typedef for variables made of bit flags.
-
-2016-09-19  Ron Norman <rjn@inglenet.com>
-
-	* numeric.c: added cob_decimal_clear
 
 2016-08-24  Edward Hart <edward.dan.hart@gmail.com>
 
@@ -352,6 +163,18 @@
 
 	* screenio.c: added support for LINE/COL 0.
 	* screenio.c: fixed small issues with DISPLAY ALL X"02" and X"07".
+
+2016-07-02  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* common.c: moved resolve of call_Xanim.funcvoid from generated modules to
+	  libcob (stored in cob_glob_ptr/cobsetptr instead of cob_anim); changed
+	  from cob_resolve to cob_resolve_cobol (hard error if not loadable)
+	* codegen.c (codegen): removed generation of empty_anim_field
+
+2016-06-27  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
+
+	* debugger.c: added draft for get_refmod(), fixed GCC warnings
+	* utils.c (ltrim): fixed not working function
 
 2016-06-26  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
@@ -397,10 +220,6 @@
 	* common.h, move.c, termio.c: replaced PICTURE strings containing packed
 	  ints with array of (cob_pic_symbol) structs which are easier to use.
 
-2016-05-01 Ron Norman <rjn@inglenet.com>
-
-	* common.c fixed incorrect reporting of error for undefined environment variables
-
 2016-04-26  Brian Tiffin <btiffin@gnu.org>
 
 	* common.c, common.h: Re-fixed CBL_OC_HOSTED tzname, timezone, daylight
@@ -439,11 +258,6 @@
 
 	* common.c (cob_set_location, cob_trace_section, cob_exit_common): fix for
 	  bug #216 - store a duplicate of cob_last_sfile for tracing, free on exit
-
-2016-03-15  Ron Norman <rjn@inglenet.com>
-
-	* common.c: display COB_PRE_LOAD as set and as evaluated
-	* call.c: clear COB_PRE_LOAD value before evaluating
 
 2016-03-13  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
@@ -630,14 +444,8 @@
 	* call.c (cob_init_call): Don't add the current directory "." to resolve_path
 	  if it's already set (either via runtime configuration or default value)
 
-2015-07-07  Ron Norman <rjn@inglenet.com>
+2015-07-07  Ron Norman
 
-	* Accept env var COB_CURRENT_DATE/COB_DATE and runtime.cfg current_date
-	  to specify a date override for the application.
-	  All ACCEPT FROM DATE, DAY, TIME will the use the value defined
-	  rather than the current system time.
-	  This will be a useful feature for application testing.
-	* common.c (cb_config_entry): keyword "reset": reset data pointer in gc_conf
 	* common.c (cob_expand_env_string): copy SPACE, LR, CR, HT, VT as spaces,
 	  the first implementation dropped them completely
 	* fileio.c fixed to avoid core dump when COB_SYNC and using BDB
@@ -892,13 +700,6 @@
 
 	* fileio.c (cob_new_item): cleanup
 
-2010-10-18  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* screenio.c (!COB_GEN_SCREENIO): Make cob_sys_sound_bell usable via
-	  cob_speaker_beep
-	* common.c:  Add possibility to disable the bell via
-	  COB_BELL=NO/NONE/0/OFF (currently only the first char is checked)
-
 2010-09-03  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
 	* screenio.c: Added cob_convert_key for converting keys according to used
@@ -912,14 +713,6 @@
 2010-05-18  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
 
    * strings.c: Fixing cob_unstring_into bug (#139)
-
-2010-03-10  Simon 'sf-mensch/human' Sobisch <simonsobisch@gnu.org>
-
-	* common.c, screenio.c: New env var COB_BELL for controlling WITH BEEP,
-	  possible values (standard BEEP):
-	  BEEP    (curses beep on soundcard/pc-speaker, fallback terminal flash)
-	  FLASH   (curses terminal flash, fallback beep on soundcard/pc-speaker)
-	  SPEAKER (printf("\a"))
 
 20??-??-??  Roger While <simrw@sim-basis.de>
 
@@ -1689,9 +1482,9 @@
 
 2006-05-08  Roger While <simrw@sim-basis.de>
 
-	* common.c, common.h: cob_chain_setup - setup CHAINING params from
+	* common.c, common.h: cob_chain_setup - Setp CHAINING params from
 	  command line
-	* strings.c, strings.h: implement TRAILING syntax in INSPECT clause
+	* strings.c, strings.h: Implement TRAILING syntax in INSPECT clause
 
 2006-05-05  Roger While <simrw@sim-basis.de>
 

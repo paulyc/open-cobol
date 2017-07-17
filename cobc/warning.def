@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2003-2012, 2016-2017 Free Software Foundation, Inc.
+   Copyright (C) 2003-2012, 2016 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While
 
    This file is part of GnuCOBOL.
@@ -21,17 +21,14 @@
 
 /* CB_WARNDEF (var, name, doc) */
 
-/* Always active, start doc with do not warn...  */
+/* Always active, start doc with don't warn...  */
 /* CB_ONWARNDEF (var, name, doc) */
 
 /* Do not include warning with -Wall */
 /* CB_NOWARNDEF (var, name, doc) */
 
 CB_ONWARNDEF (cb_warn_unfinished, "unfinished",
-	    _("do not warn if unfinished features are used"))
-
-CB_ONWARNDEF (cb_warn_pending, "pending",
-	    _("do not warn if pending features are mentioned"))
+	    _("don't warn if unfinished features are used"))
 
 CB_WARNDEF (cb_warn_obsolete, "obsolete",
 	    _("warn if obsolete features are used"))
@@ -42,11 +39,8 @@ CB_WARNDEF (cb_warn_archaic, "archaic",
 CB_WARNDEF (cb_warn_redefinition, "redefinition",
 	    _("warn incompatible redefinition of data items"))
 
-CB_WARNDEF (cb_warn_truncate, "truncate",
-	    _("warn field truncation from constant assignments"))
-
-CB_NOWARNDEF (cb_warn_pos_truncate, "possible-truncate",
-	    _("warn possible field truncation"))
+CB_WARNDEF (cb_warn_constant, "constant",
+	    _("warn inconsistent constant"))
 
 CB_WARNDEF (cb_warn_overlap, "overlap",
 	    _("warn overlapping MOVE items"))
@@ -72,20 +66,17 @@ CB_WARNDEF (cb_warn_ignored_initial_val, "initial-value",
 CB_WARNDEF (cb_warn_prototypes, "prototypes",
 	    _("warn missing FUNCTION prototypes/definitions"))
 
-CB_WARNDEF (cb_warn_arithmetic_osvs, "arithmetic-osvs",
-	    _("warn if arithmetic expression precision has changed"))
-
 CB_NOWARNDEF (cb_warn_call_params, "call-params",
 	    _("warn non 01/77 items for CALL params"))
-
-CB_WARNDEF (cb_warn_constant_expr, "constant-expression",
-	    _("warn expressions that always resolve to true/false"))
 
 CB_NOWARNDEF (cb_warn_column_overflow, "column-overflow",
 	    _("warn text after program-text area, FIXED format"))
 
 CB_NOWARNDEF (cb_warn_terminator, "terminator",
 	    _("warn lack of scope terminator END-XXX"))
+
+CB_NOWARNDEF (cb_warn_truncate, "truncate",
+	    _("warn possible field truncation"))
 
 CB_NOWARNDEF (cb_warn_linkage, "linkage",
 	    _("warn dangling LINKAGE items"))

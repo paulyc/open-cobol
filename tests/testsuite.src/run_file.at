@@ -1,4 +1,4 @@
-## Copyright (C) 2003-2012, 2014-2017 Free Software Foundation, Inc.
+## Copyright (C) 2003-2012, 2014-2016 Free Software Foundation, Inc.
 ## Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
 ##
 ## This file is part of GnuCOBOL.
@@ -17,7 +17,6 @@
 ## along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 ### GnuCOBOL Test Suite
-
 
 AT_SETUP([READ INTO AT-END sequence])
 AT_KEYWORDS([runfile])
@@ -166,9 +165,6 @@ AT_CLEANUP
 AT_SETUP([SORT with SD, I/O SEQUENTIAL])
 AT_KEYWORDS([runfile using giving])
 
-# Note: We shouldn't use AT_DATA to create sequential record
-# data, because AT_DATA needs a \n at the end
-
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
        PROGRAM-ID.      prog.
@@ -188,7 +184,8 @@ AT_DATA([prog.cob], [
        01 WRK-REC       PIC X(6).
        PROCEDURE        DIVISION.
 
-      * Special case: write test data in COBOL, see note above
+      * We shouldn't use AT_DATA to create sequential record
+      * data, because AT_DATA needs a \n at the end
            OPEN OUTPUT SORT-IN.
            WRITE IN-REC FROM SPACES   END-WRITE.
            WRITE IN-REC FROM SPACES   END-WRITE.
@@ -216,9 +213,6 @@ AT_CLEANUP
 AT_SETUP([SORT with SD, I/O LINE SEQUENTIAL])
 AT_KEYWORDS([runfile using giving])
 
-# Note: We shouldn't use AT_DATA to create sequential record
-# data, because AT_DATA needs a \n at the end
-
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
        PROGRAM-ID.      prog.
@@ -240,7 +234,8 @@ AT_DATA([prog.cob], [
        01 WRK-REC       PIC X(6).
        PROCEDURE        DIVISION.
 
-      * Special case: write test data in COBOL, see note above
+      * We shouldn't use AT_DATA to create sequential record
+      * data, because AT_DATA needs a \n at the end
            OPEN OUTPUT SORT-IN.
            WRITE IN-REC FROM SPACES   END-WRITE.
            WRITE IN-REC FROM SPACES   END-WRITE.
@@ -300,8 +295,8 @@ AT_DATA([prog.cob], [
        01 sort-entry    PIC X(6).
        PROCEDURE        DIVISION.
 
-      * We can use normal test data as we want to
-      * create a line sequential file.
+      * We shouldn't use : > to create sequential record
+      * data, because : > needs a \n at the end
       *     OPEN OUTPUT SORT-IN.
       *     WRITE IN-REC FROM SPACES   END-WRITE.
       *     WRITE IN-REC FROM "world " END-WRITE.
@@ -591,436 +586,3 @@ REWROTE BET00000 Sts:00 Trms:0014
 ], [])
 
 AT_CLEANUP
-
-AT_SETUP([START RELATIVE (1)])
-AT_KEYWORDS([fundamental runfile DELETE FILE])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION   DIVISION.
-       PROGRAM-ID.      prog.
-       ENVIRONMENT      DIVISION.
-       INPUT-OUTPUT     SECTION.
-       FILE-CONTROL.
-       SELECT OPTIONAL TEST-FILE
-              ASSIGN      "TESTFILE"
-              ACCESS       DYNAMIC
-              ORGANIZATION RELATIVE
-              STATUS       TESTSTAT
-              RELATIVE KEY TESTKEY
-       .
-       DATA             DIVISION.
-       FILE             SECTION.
-       FD  TEST-FILE.
-       01  TEST-REC     PIC X(4).
-       WORKING-STORAGE  SECTION.
-       01  TESTKEY      USAGE BINARY-LONG.
-       01  TESTSTAT     PIC XX.
-           88  V-OK     VALUE "00" "05".
-       PROCEDURE        DIVISION.
-           DELETE FILE TEST-FILE.
-           OPEN  I-O   TEST-FILE.
-           IF NOT V-OK
-              DISPLAY "OPEN " TESTSTAT
-              END-DISPLAY
-              GOBACK
-           END-IF.
-           MOVE 99 TO TESTKEY.
-           START TEST-FILE KEY < TESTKEY
-           END-START.
-           IF TESTSTAT NOT = "23"
-              DISPLAY "START " TESTSTAT
-              END-DISPLAY
-           END-IF.
-           CLOSE TEST-FILE.
-       END PROGRAM prog.
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([./prog], [0], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([START RELATIVE (2)])
-AT_KEYWORDS([fundamental runfile DELETE FILE])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION   DIVISION.
-       PROGRAM-ID.      prog.
-       ENVIRONMENT      DIVISION.
-       INPUT-OUTPUT     SECTION.
-       FILE-CONTROL.
-       SELECT OPTIONAL TEST-FILE
-              ASSIGN      "TESTFILE"
-              ACCESS       DYNAMIC
-              ORGANIZATION RELATIVE
-              STATUS       TESTSTAT
-              RELATIVE KEY TESTKEY
-       .
-       DATA             DIVISION.
-       FILE             SECTION.
-       FD  TEST-FILE.
-       01  TEST-REC     PIC X(4).
-       WORKING-STORAGE  SECTION.
-       01  TESTKEY      USAGE BINARY-LONG.
-       01  TESTSTAT     PIC XX.
-           88  V-OK     VALUE "00" "05".
-           88  V-ZERO   VALUE "00".
-       PROCEDURE        DIVISION.
-           DELETE FILE TEST-FILE.
-           OPEN  I-O   TEST-FILE.
-           IF NOT V-OK
-              DISPLAY "OPEN " TESTSTAT
-              END-DISPLAY
-              GOBACK
-           END-IF.
-           MOVE 3 TO TESTKEY.
-           MOVE "0003" TO TEST-REC.
-           WRITE TEST-REC INVALID KEY
-                 DISPLAY "WRITE " TESTSTAT
-                 END-DISPLAY
-           END-WRITE.
-           MOVE 2 TO TESTKEY.
-           MOVE "0002" TO TEST-REC.
-           WRITE TEST-REC INVALID KEY
-                 DISPLAY "WRITE " TESTSTAT
-                 END-DISPLAY
-           END-WRITE.
-           MOVE 99 TO TESTKEY.
-           START TEST-FILE KEY < TESTKEY
-           END-START.
-           IF NOT V-ZERO
-              DISPLAY "START " TESTSTAT
-              END-DISPLAY
-           END-IF.
-           IF TESTKEY NOT = 99
-              DISPLAY "TESTKEY " TESTKEY
-              END-DISPLAY
-           END-IF.
-           MOVE  SPACE TO TEST-REC.
-           READ  TEST-FILE NEXT
-           END-READ.
-           IF NOT V-ZERO
-              DISPLAY "READ " TESTSTAT
-              END-DISPLAY
-           END-IF.
-           IF TEST-REC NOT = "0003"
-              DISPLAY "READ RECORD " TEST-REC
-              END-DISPLAY
-           END-IF.
-           CLOSE TEST-FILE.
-       END PROGRAM prog.
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([./prog], [0], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([Read on optional missing file])
-AT_KEYWORDS([FILEIO])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog.
-       ENVIRONMENT DIVISION.
-       CONFIGURATION SECTION.
-       INPUT-OUTPUT SECTION.
-       FILE-CONTROL.
-           SELECT OPTIONAL INFILE  ASSIGN TO
-                "missing.txt"
-                ORGANIZATION IS RELATIVE
-                ACCESS IS SEQUENTIAL
-                FILE STATUS IS WSFS.
-       DATA DIVISION.
-       FILE SECTION.
-       FD  INFILE.
-       01  INREC             PIC X(80).
-       WORKING-STORAGE SECTION.
-       01  WSFS           PIC X(2).
-           88  RECORDFOUND VALUE "00".
-       01  WSINREC         PIC X(80).
-       PROCEDURE DIVISION.
-       MAIN-PROCEDURE.
-      *    Open missing file
-           OPEN INPUT INFILE
-      *    First read, raise a FS 10 (AT END) which is expected
-           READ INFILE INTO WSINREC
-           END-READ
-           IF WSFS = '10'
-              DISPLAY "1st Read on missing optional file = " WSFS " OK"
-           ELSE
-              DISPLAY "1st Read on missing optional file = " WSFS " Bad"
-           END-IF.
-
-      *    Second read, should raise a FS 46 (READ AFTER AT END)
-      *    but a FS 23 is raised instead.
-           READ INFILE INTO WSINREC
-           END-READ
-
-           IF WSFS = '46'
-              DISPLAY "2nd Read on missing optional file = " WSFS " OK"
-           ELSE
-              DISPLAY "2nd Read on missing optional file = " WSFS " Bad"
-           END-IF.
-
-           CLOSE INFILE
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-
-AT_CHECK([./prog], [0], [1st Read on missing optional file = 10 OK
-2nd Read on missing optional file = 46 OK
-], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([System routines for directories])
-AT_KEYWORDS([extensions runfile CBL_CREATE_DIR CBL_CHANGE_DIR CBL_DELETE_DIR])
-
-AT_DATA([prog.cob], [
-        IDENTIFICATION DIVISION.
-        PROGRAM-ID. prog.
-        DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        01 DIR PIC X(4) VALUE 'ABCD'.
-
-        PROCEDURE DIVISION.
-        CALL 'CBL_CREATE_DIR' USING DIR END-CALL
-        IF RETURN-CODE NOT = 0
-            DISPLAY 'error creating dir ...' END-DISPLAY
-        END-IF
-
-        CALL 'CBL_CHANGE_DIR' USING DIR END-CALL
-        IF RETURN-CODE NOT = 0
-            DISPLAY 'error changing dir ...' END-DISPLAY
-        END-IF
-
-        CALL 'CBL_CHANGE_DIR' USING '..' END-CALL
-        IF RETURN-CODE NOT = 0
-            DISPLAY 'error changing dir up ...' END-DISPLAY
-        END-IF
-
-        CALL 'CBL_DELETE_DIR' USING DIR END-CALL
-        IF RETURN-CODE NOT = 0
-            DISPLAY 'error deleting dir' END-DISPLAY
-        END-IF
-
-        STOP RUN.
-])
-
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([./prog], [0], [], [])
-AT_CHECK([test -e abcd], [1], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([System routines for files])
-AT_KEYWORDS([extensions runfile CBL_CREATE_FILE CBL_WRITE_FILE CBL_FLUSH_FILE
-CBL_OPEN_FILE CBL_READ_FILE CBL_CLOSE_FILE CBL_RENAME_FILE CBL_DELETE_FILE
-C$DELETE])
-
-AT_DATA([file1], [
-dummy
-])
-AT_DATA([file2], [
-test
-])
-AT_DATA([file3], [
-data
-])
-
-AT_DATA([prog.cob], [
-        IDENTIFICATION DIVISION.
-        PROGRAM-ID.     prog.
-        DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        01 FNAME        PIC X(256) VALUE 'testtext.txt'.
-        01 ACCESS-MODE  PIC X      USAGE COMP-X VALUE 2.
-        01 FHANDLE      PIC X(4)   USAGE COMP-X.
-
-        01 OFFSET       PIC X(8)   USAGE COMP-X.
-        01 NBYTES       PIC X(4)   USAGE COMP-X.
-        01 WRITE-BUFFER PIC X(20).
-
-        PROCEDURE DIVISION.
-        CALL 'CBL_CREATE_FILE' USING FNAME 55 11 22 FHANDLE
-        END-CALL
-        IF RETURN-CODE NOT = -1
-           DISPLAY 'Wrong return codes ...' END-DISPLAY
-        END-IF
-        MOVE 0 TO RETURN-CODE
-
-        CALL 'CBL_CREATE_FILE' USING
-        FNAME ACCESS-MODE 0 0 FHANDLE
-        END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error creating file ...' END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        MOVE 'TestText.ABCD' TO WRITE-BUFFER.
-        MOVE 0 TO OFFSET.
-        MOVE 9 TO NBYTES.
-
-        CALL 'CBL_WRITE_FILE' USING
-        FHANDLE OFFSET NBYTES '0' WRITE-BUFFER
-        END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error writing file ...' END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        CALL 'CBL_FLUSH_FILE' USING FHANDLE END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error flushing file ...' END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        CALL 'CBL_CLOSE_FILE' USING FHANDLE END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error closing file ...' END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        STOP RUN.
-])
-
-AT_DATA([prog2.cob], [
-        IDENTIFICATION DIVISION.
-        PROGRAM-ID.     prog2.
-        DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        01 FNAME        PIC X(256) VALUE 'testtext.txt'.
-        01 RET          PIC -9.
-        01 FHANDLE      PIC X(4)   USAGE COMP-X.
-
-        01 OFFSET       PIC X(8)   USAGE COMP-X.
-        01 NBYTES       PIC X(4)   USAGE COMP-X.
-        01 READ-BUFFER  PIC X(10).
-
-        PROCEDURE DIVISION.
-        CALL 'CBL_OPEN_FILE' USING FNAME 1 0 0 FHANDLE
-        END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error opening file ...' END-DISPLAY
-        END-IF
-
-        MOVE SPACES TO READ-BUFFER.
-        MOVE 2 TO OFFSET.
-        MOVE 9 TO NBYTES.
-
-        CALL 'CBL_READ_FILE' USING
-        FHANDLE OFFSET NBYTES 0 READ-BUFFER
-        END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error reading file ...'
-                   return-code
-           END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-        IF READ-BUFFER NOT = 'stText.' *> text from first test
-           DISPLAY 'Wrong readbuffer ...' END-DISPLAY
-        END-IF
-
-        CALL 'CBL_CLOSE_FILE' USING FHANDLE END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error closing file ...'
-                   return-code
-           END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        CALL 'CBL_RENAME_FILE' USING FNAME 'foo.txt' END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error renaming file ...'
-                   return-code
-           END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-
-        CALL 'CBL_DELETE_FILE' USING 'file1' END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error deleting file1 ...'
-                   return-code
-           END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-        CALL 'CBL_DELETE_FILE' USING 'file1' END-CALL
-        IF RETURN-CODE = 0
-           DISPLAY 'no error on deleting file1 for the second time...'
-                   return-code
-           END-DISPLAY
-        END-IF
-        MOVE 0 TO RETURN-CODE
-
-        CALL 'C$DELETE' USING 'file2' 'S' END-CALL
-        IF RETURN-CODE NOT = 0
-           DISPLAY 'error deleting file2 ...'
-                   return-code
-           END-DISPLAY
-           MOVE 0 TO RETURN-CODE
-        END-IF
-        CALL 'CBL_DELETE_FILE' USING 'file2' END-CALL
-        IF RETURN-CODE = 0   *> note: should only return 0 or 1 when in ACUCOBOL mode
-           DISPLAY 'no error on deleting file2 for the second time...'
-                   return-code
-           END-DISPLAY
-        END-IF
-        MOVE 0 TO RETURN-CODE
-
-        STOP RUN.
-])
-
-
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([$COMPILE prog2.cob], [0], [], [])
-AT_CHECK([./prog], [0], [],
-[libcob: prog.cob: 15: warning: call to CBL_CREATE_FILE with wrong file_lock: 11
-libcob: prog.cob: 15: warning: call to CBL_CREATE_FILE with wrong file_dev: 22
-libcob: prog.cob: 15: warning: call to CBL_OPEN_FILE with wrong access mode: 55
-])
-AT_CHECK([./prog2], [0], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([System routine CBL_COPY_FILE])
-AT_KEYWORDS([extensions runfile])
-
-AT_DATA([prog.cob], [
-        IDENTIFICATION DIVISION.
-        PROGRAM-ID. prog.
-        DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        PROCEDURE DIVISION.
-        DISPLAY "test" END-DISPLAY
-        STOP RUN.
-])
-
-AT_DATA([prog2.cob], [
-        IDENTIFICATION DIVISION.
-        PROGRAM-ID. prog2.
-        DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        01 FILE1 PIC X(8) VALUE 'prog.cob'.
-        01 FILE2 PIC X(9) VALUE 'prog3.cob'.
-
-        PROCEDURE DIVISION.
-        CALL 'CBL_COPY_FILE' USING
-        FILE1 FILE2
-        END-CALL
-        STOP RUN.
-])
-
-AT_CHECK([$COMPILE prog2.cob], [0], [], [])
-AT_CHECK([./prog2], [0], [], [])
-AT_CHECK([diff prog.cob prog3.cob], [0], [], [])
-
-AT_CLEANUP
-

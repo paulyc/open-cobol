@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2007-2012, 2014-2017 Free Software Foundation, Inc.
+   Copyright (C) 2007-2012, 2014-2016 Free Software Foundation, Inc.
    Written by Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
@@ -30,18 +30,10 @@
    exported to user space
 */
 
-#ifdef HAVE_ISFINITE
-#define ISFINITE isfinite
-#else
-#define ISFINITE finite
-#endif
 #if	defined(_MSC_VER) || defined(__BORLANDC__) || defined(__WATCOMC__)
-
 #include <float.h>
-#undef ISFINITE
-#define	ISFINITE		_finite
+#define	finite		_finite
 #endif
-
 
 #if	defined(ENABLE_NLS) && defined(COB_NLS_RUNTIME)
 #include "lib/gettext.h"
@@ -221,15 +213,13 @@ typedef struct __cob_settings {
 	char		*cob_sys_term;		/* TERM setting from env */
 	char		*cob_sys_type;		/* OSTYPE setting from env */
 	char		*cob_debug_log;
-	char		*cob_date;		/* Date override for testing purposes / UTC hint */
-	struct cob_time	cob_time_constant;
+	unsigned int	cob_anim;		/* EB: Animator active */
 
 	/* call.c */
 	unsigned int	cob_physical_cancel;
 	unsigned int	name_convert;
 	char		*cob_preload_str;
 	char		*cob_library_path;
-	char		*cob_preload_str_set;
 
 	size_t		*resolve_size;	/* Array size of resolve_path*/
 	char		*cob_preload_resolved;

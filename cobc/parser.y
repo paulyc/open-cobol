@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2001-2012, 2014-2017 Free Software Foundation, Inc.
+   Copyright (C) 2001-2012, 2014-2016 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart
 
    This file is part of GnuCOBOL.
@@ -74,7 +74,7 @@ do { \
 #define TERM_SUBTRACT		19U
 #define TERM_UNSTRING		20U
 #define TERM_WRITE		21U
-#define TERM_MAX		22U	/* Always last entry, used for array size */
+#define TERM_MAX		22U
 
 #define	TERMINATOR_WARNING(x,z)	terminator_warning (x, TERM_##z, #z)
 #define	TERMINATOR_ERROR(x,z)	terminator_error (x, TERM_##z, #z)
@@ -126,13 +126,13 @@ struct cb_statement		*current_statement = NULL;
 struct cb_label			*current_section = NULL;
 struct cb_label			*current_paragraph = NULL;
 cb_tree				defined_prog_list = NULL;
+char				*cobc_glob_line = NULL;
 int				cb_exp_line = 0;
 
 cb_tree				cobc_printer_node = NULL;
 int				functions_are_all = 0;
 int				non_const_word = 0;
 int				suppress_data_exceptions = 0;
-int				call_line_number;
 unsigned int			cobc_repeat_last_token = 0;
 unsigned int			cobc_in_id = 0;
 unsigned int			cobc_in_procedure = 0;
@@ -170,7 +170,6 @@ static enum cb_storage		current_storage;
 
 static cb_tree			perform_stack;
 static cb_tree			qualifier;
-static cb_tree			keys_list;
 
 static cb_tree			save_tree;
 static cb_tree			start_tree;
@@ -180,8 +179,7 @@ static unsigned int		in_declaratives;
 static unsigned int		in_debugging;
 static unsigned int		current_linage;
 static unsigned int		report_count;
-static unsigned int		first_prog;
-static unsigned int		setup_from_identification;
+static unsigned int		prog_end;
 static unsigned int		use_global_ind;
 static unsigned int		same_area;
 static unsigned int		inspect_keyword;
@@ -199,6 +197,7 @@ static cob_flags_t		set_attr_val_off;
 static cob_flags_t		check_duplicate;
 static cob_flags_t		check_on_off_duplicate;
 static cob_flags_t		check_pic_duplicate;
+static cob_flags_t		check_comp_duplicate;
 static cob_flags_t		check_line_col_duplicate;
 static unsigned int		skip_statements;
 static unsigned int		start_debug;
@@ -209,7 +208,6 @@ static unsigned int		env_div_seen;
 static cob_flags_t		header_check;
 static unsigned int		call_nothing;
 static enum tallying_phrase	previous_tallying_phrase;
-static cb_tree			default_rounded_mode;
 
 static enum cb_display_type	display_type;
 static int			is_first_display_item;
@@ -244,13 +242,14 @@ static cb_tree			eval_check[EVAL_DEPTH][EVAL_DEPTH];
 static void
 begin_statement (const char *name, const unsigned int term)
 {
-	if (check_unreached) {
-		cb_warning (cb_warn_unreachable, _("unreachable statement '%s'"), name);
+	if (cb_warn_unreachable && check_unreached) {
+		cb_warning (_("unreachable statement '%s'"), name);
 	}
 	current_paragraph->flag_statement = 1;
 	current_statement = cb_build_statement (name);
 	CB_TREE (current_statement)->source_file = cb_source_file;
 	CB_TREE (current_statement)->source_line = cb_source_line;
+	current_statement->statement = cobc_glob_line;
 	current_statement->flag_in_debug = in_debugging;
 	emit_statement (CB_TREE (current_statement));
 	if (term) {
@@ -259,17 +258,11 @@ begin_statement (const char *name, const unsigned int term)
 	main_statement = current_statement;
 }
 
-/* create a new statement with base attributes of current_statement
-   and set this as new current_statement */
 static void
 begin_implicit_statement (void)
 {
-	struct cb_statement	*new_statement;
-	new_statement = cb_build_statement (NULL);
-	new_statement->common = current_statement->common;
-	new_statement->name = current_statement->name;
-	new_statement->flag_in_debug = !!in_debugging;
-	current_statement = new_statement;
+	current_statement = cb_build_statement (NULL);
+	current_statement->flag_in_debug = !!in_debugging;
 	main_statement->body = cb_list_add (main_statement->body,
 					    CB_TREE (current_statement));
 }
@@ -286,20 +279,19 @@ void print_bits (cob_flags_t num)
 		/* Print last bit and shift left. */
 		fprintf (stderr, "%u ", num & max_pow ? 1 : 0);
 		num = num << 1;
-	}
+ 	}
 	fprintf (stderr, "\n");
 }
 #endif
 
 static void
-emit_entry (const char *name, const int encode, cb_tree using_list, cb_tree convention)
+emit_entry (const char *name, const int encode, cb_tree using_list)
 {
 	cb_tree		l;
 	cb_tree		label;
 	cb_tree		x;
-	cb_tree		entry_conv;
-	struct cb_field	*f, *ret_f;
-	int			param_num;
+	struct cb_field	*f;
+	int		parmnum;
 	char		buff[COB_MINI_BUFF];
 
 	snprintf (buff, (size_t)COB_MINI_MAX, "E$%s", name);
@@ -322,56 +314,45 @@ emit_entry (const char *name, const int encode, cb_tree using_list, cb_tree conv
 						"START PROGRAM", NULL));
 	}
 
-	param_num = 1;
+	parmnum = 1;
 	for (l = using_list; l; l = CB_CHAIN (l)) {
 		x = CB_VALUE (l);
 		if (CB_VALID_TREE (x) && cb_ref (x) != cb_error_node) {
 			f = CB_FIELD (cb_ref (x));
+			if (f->level != 01 && f->level != 77) {
+				cb_error_x (x, _("'%s' not level 01 or 77"), cb_name (x));
+			}
 			if (!current_program->flag_chained) {
 				if (f->storage != CB_STORAGE_LINKAGE) {
-					cb_error_x (x, _("'%s' is not in LINKAGE SECTION"), f->name);
+					cb_error_x (x, _("'%s' is not in LINKAGE SECTION"), cb_name (x));
 				}
 				if (f->flag_item_based || f->flag_external) {
-					cb_error_x (x, _("'%s' cannot be BASED/EXTERNAL"), f->name);
+					cb_error_x (x, _("'%s' cannot be BASED/EXTERNAL"), cb_name (x));
 				}
 				f->flag_is_pdiv_parm = 1;
 			} else {
 				if (f->storage != CB_STORAGE_WORKING) {
-					cb_error_x (x, _("'%s' is not in WORKING-STORAGE SECTION"), f->name);
+					cb_error_x (x, _("'%s' is not in WORKING-STORAGE SECTION"), cb_name (x));
 				}
 				f->flag_chained = 1;
-				f->param_num = param_num;
-				param_num++;
-			}
-			if (f->level != 01 && f->level != 77) {
-				cb_error_x (x, _("'%s' not level 01 or 77"), f->name);
+				f->param_num = parmnum;
+				parmnum++;
 			}
 			if (f->redefines) {
-				cb_error_x (x, _ ("'%s' REDEFINES field not allowed here"), f->name);
-			}
-			/* add a "receiving" entry for the USING parameter */
-			if (cb_listing_xref) {
-				cobc_xref_link (&f->xref, CB_REFERENCE (x)->common.source_line, 1);
+				cb_error_x (x, _("'%s' REDEFINES field not allowed here"), cb_name (x));
 			}
 		}
-	}
-
-
-	if (current_program->returning &&
-		cb_ref (current_program->returning) != cb_error_node) {
-		ret_f = CB_FIELD (cb_ref (current_program->returning));
-		if (ret_f->redefines) {
-			cb_error_x (current_program->returning, _("'%s' REDEFINES field not allowed here"), ret_f->name);
-		}
-	} else {
-		ret_f = NULL;
 	}
 
 	/* Check dangling LINKAGE items */
 	if (cb_warn_linkage) {
 		for (f = current_program->linkage_storage; f; f = f->sister) {
-			if (f == ret_f) {
-				continue;
+			if (current_program->returning) {
+				if (cb_ref (current_program->returning) != cb_error_node) {
+					if (f == CB_FIELD (cb_ref (current_program->returning))) {
+						continue;
+					}
+				}
 			}
 			for (l = using_list; l; l = CB_CHAIN (l)) {
 				x = CB_VALUE (l);
@@ -382,20 +363,18 @@ emit_entry (const char *name, const int encode, cb_tree using_list, cb_tree conv
 				}
 			}
 			if (!l && !f->redefines) {
-				cb_warning (cb_warn_linkage, _("LINKAGE item '%s' is not a PROCEDURE USING parameter"), f->name);
+				cb_warning (_("LINKAGE item '%s' is not a PROCEDURE USING parameter"), f->name);
 			}
 		}
 	}
 
 	/* Check returning item against using items when FUNCTION */
-	if (current_program->prog_type == CB_FUNCTION_TYPE && current_program->returning) {
+	if (current_program->prog_type == CB_FUNCTION_TYPE) {
 		for (l = using_list; l; l = CB_CHAIN (l)) {
 			x = CB_VALUE (l);
-			if (CB_VALID_TREE (x) && cb_ref (x) != cb_error_node) {
-				f = CB_FIELD (cb_ref (x));
-				if (ret_f == f) {
-					cb_error_x (x, _("'%s' USING item duplicates RETURNING item"), f->name);
-				}
+			if (CB_VALID_TREE (x) && current_program->returning &&
+			    cb_ref (x) == cb_ref (current_program->returning)) {
+				cb_error_x (x, _("'%s' USING item duplicates RETURNING item"), cb_name (x));
 			}
 		}
 	}
@@ -408,15 +387,9 @@ emit_entry (const char *name, const int encode, cb_tree using_list, cb_tree conv
 		}
 	}
 
-	if (convention) {
-		entry_conv = convention;
-	} else {
-		entry_conv = current_program->entry_convention;
-	}
-
 	current_program->entry_list =
 		cb_list_append (current_program->entry_list,
-				CB_BUILD_PAIR (label, CB_BUILD_PAIR(entry_conv, using_list)));
+				CB_BUILD_PAIR (label, using_list));
 }
 
 static size_t
@@ -434,22 +407,18 @@ static void
 terminator_warning (cb_tree stmt, const unsigned int termid,
 		    const char *name)
 {
-	char		terminator[32];
-
 	check_unreached = 0;
 	if (term_array[termid]) {
 		term_array[termid]--;
-	/* LCOV_EXCL_START */
 	} else {
 		cobc_err_msg ("call to '%s' without any open term for %s",
 			"terminator_warning", name);
 		COBC_ABORT ();
 	}
-	/* LCOV_EXCL_END */
-	snprintf (terminator, 32, "END-%s", name);
-	if (is_reserved_word (terminator)) {
-		cb_warning_x (cb_warn_terminator, CB_TREE (current_statement),
-			_("%s statement not terminated by %s"), name, terminator);
+	if (cb_warn_terminator) {
+		cb_warning_x (CB_TREE (current_statement),
+			_("%s statement not terminated by END-%s"),
+			name, name);
 	}
 
 	/* Free tree associated with terminator */
@@ -461,26 +430,17 @@ terminator_warning (cb_tree stmt, const unsigned int termid,
 static void
 terminator_error (cb_tree stmt, const unsigned int termid, const char *name)
 {
-	char		terminator[32];
-
 	check_unreached = 0;
 	if (term_array[termid]) {
 		term_array[termid]--;
-	/* LCOV_EXCL_START */
 	} else {
 		cobc_err_msg ("call to '%s' without any open term for %s",
 			"terminator_error", name);
 		COBC_ABORT ();
 	}
-	/* LCOV_EXCL_END */
-	snprintf (terminator, 32, "END-%s", name);
-	if (is_reserved_word (terminator)) {
-		cb_error_x (CB_TREE (current_statement),
-			_("%s statement not terminated by %s"), name, terminator);
-	} else {
-		cb_error_x (CB_TREE (current_statement),
-			_("%s statement not terminated"), name);
-	}
+	cb_error_x (CB_TREE (current_statement),
+		_("%s statement not terminated by END-%s"),
+		name, name);
 
 	/* Free tree associated with terminator */
 	if (stmt) {
@@ -494,13 +454,11 @@ terminator_clear (cb_tree stmt, const unsigned int termid)
 	check_unreached = 0;
 	if (term_array[termid]) {
 		term_array[termid]--;
-	/* LCOV_EXCL_START */
 	} else {
 		cobc_err_msg ("call to '%s' without any open term for %s",
 			"terminator_warning", current_statement->name);
 		COBC_ABORT ();
 	}
-	/* LCOV_EXCL_END */
 	/* Free tree associated with terminator */
 	if (stmt) {
 		cobc_parse_free (stmt);
@@ -559,10 +517,8 @@ setup_use_file (struct cb_file *fileptr)
 static void
 emit_duplicate_clause_message (const char *clause)
 {
-	/* FIXME: replace by a new warning level that is set
-	   to warn/error depending on cb_relaxed_syntax_checks */
 	if (cb_relaxed_syntax_checks) {
-		cb_warning (COBC_WARN_FILLER, _("duplicate %s clause"), clause);
+		cb_warning (_("duplicate %s clause"), clause);
 	} else {
 		cb_error (_("duplicate %s clause"), clause);
 	}
@@ -613,9 +569,9 @@ setup_occurs_min_max (cb_tree occurs_min, cb_tree occurs_max)
 			current_field->occurs_max = cb_get_int (occurs_max);
 			if (!current_field->depending) {
 				if (cb_relaxed_syntax_checks) {
-					cb_warning (COBC_WARN_FILLER, _ ("TO phrase without DEPENDING phrase"));
-					cb_warning (COBC_WARN_FILLER, _ ("maximum number of occurences assumed to be exact number"));
-					current_field->occurs_min = 1; /* CHECKME: why using 1 ? */
+					cb_warning (_ ("TO phrase without DEPENDING phrase"));
+					cb_warning (_ ("maximum number of occurences assumed to be exact number"));
+					current_field->occurs_min = 1; /* Checkme: why using 1 ? */
 				} else {
 					cb_error (_ ("TO phrase without DEPENDING phrase"));
 				}
@@ -627,7 +583,7 @@ setup_occurs_min_max (cb_tree occurs_min, cb_tree occurs_max)
 			current_field->occurs_max = 0;
 		}
 	} else {
-		current_field->occurs_min = 1; /* CHECKME: why using 1 ? */
+		current_field->occurs_min = 1; /* Checkme: why using 1 ? */
 		current_field->occurs_max = cb_get_int (occurs_min);
 		if (current_field->depending) {
 			cb_verify (cb_odo_without_to, _ ("ODO without TO phrase"));
@@ -694,48 +650,40 @@ check_relaxed_syntax (const cob_flags_t lev)
 		break;
 	}
 	if (cb_relaxed_syntax_checks) {
-		cb_warning (COBC_WARN_FILLER, _("%s header missing - assumed"), s);
+		cb_warning (_("%s header missing - assumed"), s);
 	} else {
 		cb_error (_("%s header missing"), s);
 	}
 }
 
-/* check if headers are present - return 0 if fine, 1 if missing
-   Lev1 must always be present and is checked
-   Lev2/3/4, if non-zero (forced) may be present
-*/
-static int
+static void
 check_headers_present (const cob_flags_t lev1, const cob_flags_t lev2,
 		       const cob_flags_t lev3, const cob_flags_t lev4)
 {
-	int ret = 0;
+	/* Lev1 is always present and checked */
+	/* Lev2/3/4, if non-zero (forced) may be present */
 	if (!(header_check & lev1)) {
 		header_check |= lev1;
 		check_relaxed_syntax (lev1);
-		ret = 1;
 	}
 	if (lev2) {
 		if (!(header_check & lev2)) {
 			header_check |= lev2;
 			check_relaxed_syntax (lev2);
-			ret = 1;
 		}
 	}
 	if (lev3) {
 		if (!(header_check & lev3)) {
 			header_check |= lev3;
 			check_relaxed_syntax (lev3);
-			ret = 1;
 		}
 	}
 	if (lev4) {
 		if (!(header_check & lev4)) {
 			header_check |= lev4;
 			check_relaxed_syntax (lev4);
-			ret = 1;
 		}
 	}
-	return ret;
 }
 
 static void
@@ -771,6 +719,7 @@ clear_initial_values (void)
 	use_global_ind = 0;
 	check_duplicate = 0;
 	check_pic_duplicate = 0;
+	check_comp_duplicate = 0;
 	skip_statements = 0;
 	start_debug = 0;
 	save_debug = 0;
@@ -804,7 +753,10 @@ clear_initial_values (void)
 	current_report = NULL;
 	report_instance = NULL;
 	next_label_list = NULL;
-	default_rounded_mode = cb_int (COB_STORE_ROUND);
+	if (cobc_glob_line) {
+		cobc_free (cobc_glob_line);
+		cobc_glob_line = NULL;
+	}
 }
 
 /*
@@ -855,19 +807,10 @@ remove_program_name (struct cb_list *l, struct cb_list *prev)
 
 /* Remove the program from defined_prog_list, if necessary. */
 static void
-end_scope_of_program_name (struct cb_program *program, const unsigned char type)
+end_scope_of_program_name (struct cb_program *program)
 {
 	struct	cb_list	*prev = NULL;
 	struct	cb_list *l = (struct cb_list *) defined_prog_list;
-
-	/* create empty entry if the program has no PROCEDURE DIVISION, error for UDF */
-	if (!program->entry_list) {
-		if (type == CB_FUNCTION_TYPE) {
-			cb_error (_("FUNCTION '%s' has no PROCEDURE DIVISION"), program->program_name);
-		} else {
-			emit_entry (program->program_id, 0, NULL, NULL);
-		}
-	}
 
 	if (program->nested_level == 0) {
 		return;
@@ -881,7 +824,7 @@ end_scope_of_program_name (struct cb_program *program, const unsigned char type)
 		} else {
 			prev = l;
 		}
-		if (prev && prev->chain != NULL) {
+		if (prev->chain != NULL) {
 			l = CB_LIST (prev->chain);
 		} else {
 			l = NULL;
@@ -896,7 +839,7 @@ end_scope_of_program_name (struct cb_program *program, const unsigned char type)
 				    CB_PROGRAM (l->value)->orig_program_id)
 			    == 0) {
 				remove_program_name (l, prev);
-				if (prev && prev->chain != NULL) {
+				if (prev->chain != NULL) {
 					l = CB_LIST (prev->chain);
 				} else {
 					l = NULL;
@@ -914,30 +857,29 @@ end_scope_of_program_name (struct cb_program *program, const unsigned char type)
 	}
 }
 
-static void
-setup_program_start (void)
-{
-	if (setup_from_identification) {
-		setup_from_identification = 0;
-		return;
-	}
-	current_section = NULL;
-	current_paragraph = NULL;
-
-	if (depth != 0 && first_nested_program) {
-		check_headers_present (COBC_HD_PROCEDURE_DIVISION, 0, 0, 0);
-	}
-	first_nested_program = 1;
-}
-
 static int
 setup_program (cb_tree id, cb_tree as_literal, const unsigned char type)
 {
-	setup_program_start ();
+	current_section = NULL;
+	current_paragraph = NULL;
 
-	if (first_prog) {
-		first_prog = 0;
+	if (CB_LITERAL_P (id)) {
+		stack_progid[depth] = (char *)(CB_LITERAL (id)->data);
 	} else {
+		stack_progid[depth] = (char *)(CB_NAME (id));
+	}
+
+	if (depth > 0) {
+		if (first_nested_program) {
+		check_headers_present (COBC_HD_PROCEDURE_DIVISION, 0, 0, 0);
+	}
+		if (type == CB_FUNCTION_TYPE) {
+			cb_error ("functions may not be defined within a program/function");
+		}
+	}
+	first_nested_program = 1;
+
+	if (prog_end) {
 		if (!current_program->flag_validated) {
 			current_program->flag_validated = 1;
 			cb_validate_program_body (current_program);
@@ -946,22 +888,13 @@ setup_program (cb_tree id, cb_tree as_literal, const unsigned char type)
 		clear_initial_values ();
 		current_program = cb_build_program (current_program, depth);
 		build_nested_special (depth);
-		cb_set_intr_when_compiled ();
 		cb_build_registers ();
-	}
-
-	if (CB_LITERAL_P (id)) {
-		stack_progid[depth] = (char *)(CB_LITERAL (id)->data);
 	} else {
-		stack_progid[depth] = (char *)(CB_NAME (id));
-	}
-
-	if (depth != 0 && type == CB_FUNCTION_TYPE) {
-		cb_error (_("functions may not be defined within a program/function"));
+		prog_end = 1;
 	}
 
 	if (increment_depth ()) {
-		return 1;
+	        return 1;
 	}
 
 	current_program->program_id = cb_build_program_id (id, as_literal, type == CB_FUNCTION_TYPE);
@@ -1023,17 +956,15 @@ clean_up_program (cb_tree name, const unsigned char type)
 {
 	char		*s;
 
-	end_scope_of_program_name (current_program, type);
+	end_scope_of_program_name (current_program);
 
-	if (name) {
-		if (CB_LITERAL_P (name)) {
-			s = (char *)(CB_LITERAL (name)->data);
-		} else {
-			s = (char *)(CB_NAME (name));
-		}
-
-		decrement_depth (s, type);
+	if (CB_LITERAL_P (name)) {
+		s = (char *)(CB_LITERAL (name)->data);
+	} else {
+		s = (char *)(CB_NAME (name));
 	}
+
+	decrement_depth (s, type);
 
 	current_section = NULL;
 	current_paragraph = NULL;
@@ -1126,7 +1057,7 @@ check_prototype_redefines_current_element (const cb_tree prototype_name)
 	const char	*name = get_literal_or_word_name (prototype_name);
 
 	if (strcasecmp (name, current_program->program_name) == 0) {
-		cb_warning_x (COBC_WARN_FILLER, prototype_name,
+		cb_warning_x (prototype_name,
 			_("prototype has same name as current function and will be ignored"));
 		return 1;
 	}
@@ -1157,7 +1088,7 @@ check_for_duplicate_prototype (const cb_tree prototype_name,
 				    _("duplicate REPOSITORY entries for '%s' do not match"),
 				    get_literal_or_word_name (prototype_name));
 		} else {
-			cb_warning_x (COBC_WARN_FILLER, prototype_name,
+			cb_warning_x (prototype_name,
 				      _("duplicate REPOSITORY entry for '%s'"),
 				      get_literal_or_word_name (prototype_name));
 		}
@@ -1272,11 +1203,11 @@ static void
 emit_conflicting_clause_message (const char *clause, const char *conflicting)
 {
 	if (cb_relaxed_syntax_checks) {
-		cb_warning (COBC_WARN_FILLER, _("cannot specify both %s and %s; %s is ignored"),
-			clause, conflicting, clause);
+		cb_warning (_("cannot specify both %s and %s; %s is ignored"),
+			    clause, conflicting, clause);
 	} else {
 		cb_error (_("cannot specify both %s and %s"),
-			clause, conflicting);
+			  clause, conflicting);
 	}
 
 }
@@ -1466,12 +1397,10 @@ check_preceding_tallying_phrases (const enum tallying_phrase phrase)
 		}
 		break;
 
-		/* LCOV_EXCL_START */
 	default:
-		/* This should never happen (and therefore doesn't get a translation) */
-		cb_error ("unexpected tallying phrase");
+		/* This should never happen */
+		cb_error (_("unexpected tallying phrase"));
 		COBC_ABORT();
-		/* LCOV_EXCL_END */
 	}
 
 	previous_tallying_phrase = phrase;
@@ -1752,7 +1681,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token CLASSIFICATION
 %token CLASS_NAME		"class-name"
 %token CLOSE
-%token COBOL
 %token CODE
 %token CODE_SET			"CODE-SET"
 %token COLLATING
@@ -1804,14 +1732,12 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token DECIMAL_POINT		"DECIMAL-POINT"
 %token DECLARATIVES
 %token DEFAULT
-%token DEFAULT_FONT			"DEFAULT-FONT"
 %token DELETE
 %token DELIMITED
 %token DELIMITER
 %token DEPENDING
 %token DESCENDING
 %token DESTINATION
-%token DESTROY
 %token DETAIL
 %token DISABLE
 %token DISC
@@ -1833,15 +1759,15 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token EMI
 %token END
 %token END_ACCEPT		"END-ACCEPT"
-%token END_ADD  		"END-ADD"
-%token END_CALL 		"END-CALL"
+%token END_ADD			"END-ADD"
+%token END_CALL			"END-CALL"
 %token END_COMPUTE		"END-COMPUTE"
 %token END_DELETE		"END-DELETE"
 %token END_DISPLAY		"END-DISPLAY"
 %token END_DIVIDE		"END-DIVIDE"
 %token END_EVALUATE		"END-EVALUATE"
 %token END_FUNCTION		"END FUNCTION"
-%token END_IF   		"END-IF"
+%token END_IF			"END-IF"
 %token END_MULTIPLY		"END-MULTIPLY"
 %token END_PERFORM		"END-PERFORM"
 %token END_PROGRAM		"END PROGRAM"
@@ -1856,7 +1782,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token END_UNSTRING		"END-UNSTRING"
 %token END_WRITE		"END-WRITE"
 %token ENTRY
-%token ENTRY_CONVENTION		"ENTRY-CONVENTION"
 %token ENVIRONMENT
 %token ENVIRONMENT_NAME		"ENVIRONMENT-NAME"
 %token ENVIRONMENT_VALUE	"ENVIRONMENT-VALUE"
@@ -1874,7 +1799,7 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token EXCEPTION_CONDITION	"EXCEPTION CONDITION"
 %token EXCLUSIVE
 %token EXIT
-%token EXPONENTIATION		"exponentiation operator"
+%token EXPONENTIATION		"Exponentiation operator"
 %token EXTEND
 %token EXTERNAL
 %token F
@@ -1885,7 +1810,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token FINAL
 %token FIRST
 %token FIXED
-%token FIXED_FONT		"FIXED-FONT"
 %token FLOAT_BINARY_128		"FLOAT-BINARY-128"
 %token FLOAT_BINARY_32		"FLOAT-BINARY-32"
 %token FLOAT_BINARY_64		"FLOAT-BINARY-64"
@@ -1895,8 +1819,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token FLOAT_EXTENDED		"FLOAT-EXTENDED"
 %token FLOAT_LONG		"FLOAT-LONG"
 %token FLOAT_SHORT		"FLOAT-SHORT"
-%token FLOATING
-%token FONT
 %token FOOTING
 %token FOR
 %token FOREGROUND_COLOR		"FOREGROUND-COLOR"
@@ -1910,18 +1832,16 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token FULL
 %token FUNCTION
 %token FUNCTION_ID		"FUNCTION-ID"
-%token FUNCTION_NAME		"intrinsic function name"
+%token FUNCTION_NAME		"Intrinsic function name"
 %token GENERATE
 %token GIVING
 %token GLOBAL
 %token GO
 %token GOBACK
-%token GRAPHICAL
 %token GREATER
 %token GREATER_OR_EQUAL		"GREATER OR EQUAL"
 %token GRID
 %token GROUP
-%token HANDLE
 %token HEADING
 %token HIGHLIGHT
 %token HIGH_VALUE		"HIGH-VALUE"
@@ -1931,7 +1851,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token IGNORE
 %token IGNORING
 %token IN
-%token INDEPENDENT
 %token INDEX
 %token INDEXED
 %token INDICATE
@@ -1941,7 +1860,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token INPUT
 %token INPUT_OUTPUT		"INPUT-OUTPUT"
 %token INSPECT
-%token INTERMEDIATE
 %token INTO
 %token INTRINSIC
 %token INVALID
@@ -1954,9 +1872,7 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token KEY
 %token KEYBOARD
 %token LABEL
-%token LARGE_FONT			"LARGE-FONT"
 %token LAST
-%token LAYOUT_MANAGER		"LAYOUT-MANAGER"
 %token LEADING
 %token LEFT
 %token LEFTLINE
@@ -1974,7 +1890,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token LINES
 %token LINKAGE
 %token LITERAL			"Literal"
-%token LM_RESIZE			"LM-RESIZE"
 %token LOCALE
 %token LOCALE_DATE_FUNC		"FUNCTION LOCALE-DATE"
 %token LOCALE_TIME_FUNC		"FUNCTION LOCALE-TIME"
@@ -1988,14 +1903,11 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token MANUAL
 %token MAGNETIC_TAPE		"MAGNETIC-TAPE"
 %token MEMORY
-%token MEDIUM_FONT			"MEDIUM-FONT"
-%token MENU
 %token MERGE
 %token MESSAGE
 %token MINUS
 %token MNEMONIC_NAME		"Mnemonic name"
 %token MODE
-%token MODULES
 %token MOVE
 %token MULTIPLE
 %token MULTIPLY
@@ -2008,7 +1920,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token NEAREST_EVEN		"NEAREST-EVEN"
 %token NEAREST_TOWARD_ZERO	"NEAREST-TOWARD-ZERO"
 %token NEGATIVE
-%token NESTED
 %token NEXT
 %token NEXT_PAGE		"NEXT PAGE"
 %token NO
@@ -2040,7 +1951,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token ONLY
 %token OPEN
 %token OPTIONAL
-%token OPTIONS
 %token OR
 %token ORDER
 %token ORGANIZATION
@@ -2059,7 +1969,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token PICTURE_SYMBOL		"PICTURE SYMBOL"
 %token PLUS
 %token POINTER
-%token POP_UP			"POP-UP"
 %token POSITION
 %token POSITIVE
 %token PRESENT
@@ -2068,18 +1977,16 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token PRINTER
 %token PRINTER_1
 %token PRINTING
-%token PRIORITY
 %token PROCEDURE
 %token PROCEDURES
 %token PROCEED
 %token PROGRAM
 %token PROGRAM_ID		"PROGRAM-ID"
-%token PROGRAM_NAME		"program name"
+%token PROGRAM_NAME		"Program name"
 %token PROGRAM_POINTER		"PROGRAM-POINTER"
 %token PROHIBITED
 %token PROMPT
 %token PROTECTED		"PROTECTED"
-%token PURGE
 %token QUEUE
 %token QUOTE
 %token RANDOM
@@ -2124,12 +2031,11 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token RIGHT
 %token ROLLBACK
 %token ROUNDED
-%token ROUNDING
 %token RUN
 %token S
 %token SAME
 %token SCREEN
-%token SCREEN_CONTROL		"SCREEN CONTROL"
+%token SCREEN_CONTROL		"SCREEN-CONTROL"
 %token SCROLL
 %token SD
 %token SEARCH
@@ -2140,7 +2046,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token SEGMENT_LIMIT		"SEGMENT-LIMIT"
 %token SELECT
 %token SEMI_COLON		"semi-colon"
-%token SEND
 %token SENTENCE
 %token SEPARATE
 %token SEQUENCE
@@ -2156,7 +2061,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token SIXTY_SIX		"66"
 %token SIZE
 %token SIZE_ERROR		"SIZE ERROR"
-%token SMALL_FONT			"SMALL-FONT"
 %token SORT
 %token SORT_MERGE		"SORT-MERGE"
 %token SOURCE
@@ -2179,7 +2083,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token SUBSTITUTE_FUNC		"FUNCTION SUBSTITUTE"
 %token SUBSTITUTE_CASE_FUNC	"FUNCTION SUBSTITUTE-CASE"
 %token SUBTRACT
-%token SUBWINDOW
 %token SUM
 %token SUPPRESS
 %token SYMBOLIC
@@ -2196,8 +2099,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token TEST
 %token THAN
 %token THEN
-%token THREAD
-%token THREADS
 %token THRU
 %token TIME
 %token TIME_OUT			"TIME-OUT"
@@ -2209,7 +2110,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token TOK_DIV			"/"
 %token TOK_DOT			"."
 %token TOK_EQUAL		"="
-%token TOK_EXTERN		"EXTERN"
 %token TOK_FALSE		"FALSE"
 %token TOK_FILE			"FILE"
 %token TOK_GREATER		">"
@@ -2225,7 +2125,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token TOP
 %token TOWARD_GREATER		"TOWARD-GREATER"
 %token TOWARD_LESSER		"TOWARD-LESSER"
-%token TRADITIONAL_FONT		"TRADITIONAL-FONT"
 %token TRAILING
 %token TRANSFORM
 %token TRIM_FUNC		"FUNCTION TRIM"
@@ -2255,17 +2154,15 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %token USE
 %token USER
 %token USER_DEFAULT		"USER-DEFAULT"
-%token USER_FUNCTION_NAME	"user function name"
+%token USER_FUNCTION_NAME	"User function name"
 %token USING
 %token V
 %token VALUE
 %token VARIABLE
-%token VARIANT
 %token VARYING
 %token WAIT
 %token WHEN
 %token WHEN_COMPILED_FUNC	"FUNCTION WHEN-COMPILED"
-%token WINDOW
 %token WITH
 %token WORD			"Identifier"
 %token WORDS
@@ -2292,7 +2189,6 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %nonassoc COMPUTE
 %nonassoc CONTINUE
 %nonassoc DELETE
-%nonassoc DESTROY
 %nonassoc DISABLE
 %nonassoc DISPLAY
 %nonassoc DIVIDE
@@ -2341,7 +2237,7 @@ error_if_not_usage_display_or_nonnumeric_lit (cb_tree x)
 %nonassoc NOT_END END
 %nonassoc NOT_EOP EOP
 %nonassoc NOT_INVALID_KEY INVALID_KEY
-%nonassoc NOT_OVERFLOW TOK_OVERFLOW
+%nonassoc NOT_OVERFLOW OVERFLOW TOK_OVERFLOW
 %nonassoc NOT_SIZE_ERROR SIZE_ERROR
 %nonassoc NOT_EXCEPTION EXCEPTION NOT_ESCAPE ESCAPE
 %nonassoc NO_DATA DATA
@@ -2394,12 +2290,13 @@ start:
 	current_program = NULL;
 	defined_prog_list = NULL;
 	cobc_cs_check = 0;
+	prog_end = 0;
+	depth = 0;
 	main_flag_set = 0;
 	current_program = cb_build_program (NULL, 0);
-	cb_set_intr_when_compiled ();
 	cb_build_registers ();
   }
-  compilation_group
+  nested_list
   {
 	if (!current_program->flag_validated) {
 		current_program->flag_validated = 1;
@@ -2415,23 +2312,14 @@ start:
 		YYABORT;
 	}
 	if (!current_program->entry_list) {
-		emit_entry (current_program->program_id, 0, NULL, NULL);
+		emit_entry (current_program->program_id, 0, NULL);
 	}
   }
 ;
 
-compilation_group:
-  simple_prog	/* extension: single program without PROCEDURE DIVISION */
-| nested_list
-;
-
 nested_list:
-  {
-	first_prog = 1;
-	depth = 0;
-	setup_from_identification = 0;
-  }
-  source_element_list
+  simple_prog
+| source_element_list
 ;
 
 source_element_list:
@@ -2450,6 +2338,10 @@ simple_prog:
 
 	current_section = NULL;
 	current_paragraph = NULL;
+	prog_end = 1;
+	if (increment_depth ()) {
+		YYABORT;
+	}
 	l = cb_build_alphanumeric_literal (demangle_name,
 					   strlen (demangle_name));
 	current_program->program_id = cb_build_program_id (l, NULL, 0);
@@ -2461,37 +2353,27 @@ simple_prog:
 	check_relaxed_syntax (COBC_HD_PROGRAM_ID);
   }
   _program_body
-  /* do cleanup */
-  {
-	clean_up_program (NULL, CB_PROGRAM_TYPE);
-  }
 ;
 
 program_definition:
   _identification_header
   program_id_paragraph
-  _options_paragraph
   _program_body
-  _end_program_list
   /*
-     The _end_program_list above is used for allowing an end marker
-     in a program which contains a nested program.
+    The list is so a program which contains a nested program can have an end
+    marker.
   */
+  _end_program_list
 ;
 
 function_definition:
   _identification_header
   function_id_paragraph
-  _options_paragraph
   _program_body
   end_function
 ;
 
 _end_program_list:
-  /* empty (still do cleanup) */
-  {
-	clean_up_program (NULL, CB_PROGRAM_TYPE);
-  }
 | end_program_list
 ;
 
@@ -2511,7 +2393,7 @@ end_program:
 end_function:
   END_FUNCTION end_program_name TOK_DOT
   {
-	clean_up_program ($2, CB_FUNCTION_TYPE);
+	  clean_up_program ($2, CB_FUNCTION_TYPE);
   }
 ;
 
@@ -2527,16 +2409,8 @@ _program_body:
 
 _identification_header:
   %prec SHIFT_PREFER
-| identification_or_id DIVISION TOK_DOT
-  {
-	setup_program_start ();
-	setup_from_identification = 1;
-  }
-;
-
-
-identification_or_id:
-  IDENTIFICATION | ID
+| IDENTIFICATION DIVISION TOK_DOT
+| ID DIVISION TOK_DOT
 ;
 
 program_id_paragraph:
@@ -2652,88 +2526,6 @@ init_or_recurse:
   }
 ;
 
-_options_paragraph:
-  /* empty */
-| OPTIONS TOK_DOT
-  _options_clauses
-  {
-	cobc_cs_check = 0;
-  }
-;
-
-_options_clauses:
-  _default_rounded_clause
-  _entry_convention_clause
-  _intermediate_rounding_clause
-  TOK_DOT
-;
-
-_default_rounded_clause:
-  /* empty */
-  {
-	default_rounded_mode = cb_int (COB_STORE_ROUND);
-  }
-| DEFAULT ROUNDED _mode _is round_choice
-  {
-	if ($5) {
-		default_rounded_mode = $5;
-	} else {
-		default_rounded_mode = cb_int (COB_STORE_ROUND);
-	}
-  }
-;
-
-_entry_convention_clause:
-  /* empty */
-| ENTRY_CONVENTION _is convention_type
-  {
-	current_program->entry_convention = $3;
-	current_program->entry_convention->source_file = cb_source_file;
-	current_program->entry_convention->source_line = cb_source_line;
-  }
-;
-
-convention_type:
-  COBOL
-  {
-	$$ = cb_int (CB_CONV_COBOL);
-  }
-| TOK_EXTERN
-  {
-	$$ = cb_int (0);
-  }
-| STDCALL
-  {
-	$$ = cb_int (CB_CONV_STDCALL);
-  }
-;
-
-_intermediate_rounding_clause:
-  /* empty */
-| INTERMEDIATE ROUNDING _is intermediate_rounding_choice
-  {
-	CB_PENDING ("INTERMEDIATE ROUNDING");
-  }
-;
-
-intermediate_rounding_choice:
-  NEAREST_AWAY_FROM_ZERO
-  {
-	$$ = cb_int (COB_STORE_ROUND | COB_STORE_NEAR_AWAY_FROM_ZERO);
-  }
-| NEAREST_EVEN
-  {
-	$$ = cb_int (COB_STORE_ROUND | COB_STORE_NEAR_EVEN);
-  }
-| PROHIBITED
-  {
-	$$ = cb_int (COB_STORE_ROUND | COB_STORE_PROHIBITED);
-  }
-| TRUNCATION
-  {
-	$$ = cb_int (COB_STORE_ROUND | COB_STORE_TRUNCATION);
-  }
-;
 
 /* ENVIRONMENT DIVISION */
 
@@ -2754,37 +2546,10 @@ _environment_header:
 
 _configuration_section:
   _configuration_header
-  _configuration_paragraphs
-;
-
-_configuration_paragraphs:
-| standard_order_conf_section
-| nonstandard_order_conf_section
-  {
-	cb_verify (cb_incorrect_conf_sec_order,
-		   _("incorrect order of CONFIGURATION SECTION paragraphs"));
-  }
-;
-
-/*
-  We explicitly list all of the possible permutations to preclude shift/reduce
-  and reduce/reduce errors.
-*/
-
-standard_order_conf_section:
-  source_object_computer_paragraphs special_names_paragraph _repository_paragraph
-| source_object_computer_paragraphs repository_paragraph
-| source_object_computer_paragraphs
-| special_names_paragraph _repository_paragraph
-| repository_paragraph
-;
-
-nonstandard_order_conf_section:
-  source_object_computer_paragraphs repository_paragraph special_names_paragraph
-| repository_paragraph source_object_computer_paragraphs _special_names_paragraph
-| repository_paragraph special_names_paragraph _source_object_computer_paragraphs
-| special_names_paragraph source_object_computer_paragraphs _repository_paragraph
-| special_names_paragraph repository_paragraph source_object_computer_paragraphs
+  _source_object_computer_paragraphs
+  _special_names_paragraph
+  _special_names_sentence_list
+  _repository_paragraph
 ;
 
 _configuration_header:
@@ -2799,17 +2564,14 @@ _configuration_header:
 ;
 
 _source_object_computer_paragraphs:
-| source_object_computer_paragraphs
-;
-
-source_object_computer_paragraphs:
-  source_computer_paragraph
+| source_computer_paragraph
 | object_computer_paragraph
 | source_computer_paragraph object_computer_paragraph
 | object_computer_paragraph source_computer_paragraph
   {
-	cb_verify (cb_incorrect_conf_sec_order,
-		   _("incorrect order of SOURCE- and OBJECT-COMPUTER paragraphs"));
+	if (warningopt && (check_comp_duplicate & SYN_CLAUSE_2)) {
+		cb_warning (_("phrases in non-standard order"));
+	}
   }
 ;
 
@@ -2821,6 +2583,7 @@ source_computer_paragraph:
   {
 	check_headers_present (COBC_HD_ENVIRONMENT_DIVISION,
 			       COBC_HD_CONFIGURATION_SECTION, 0, 0);
+	check_repeated ("SOURCE-COMPUTER", SYN_CLAUSE_1, &check_comp_duplicate);
   }
   _source_computer_entry
 ;
@@ -2833,6 +2596,7 @@ _source_computer_entry:
 _with_debugging_mode:
 | _with DEBUGGING MODE
   {
+	cb_verify (cb_debugging_line, "DEBUGGING MODE");
 	current_program->flag_debugging = 1;
 	needs_debug_item = 1;
 	cobc_cs_check = 0;
@@ -2847,11 +2611,9 @@ object_computer_paragraph:
   {
 	check_headers_present (COBC_HD_ENVIRONMENT_DIVISION,
 			       COBC_HD_CONFIGURATION_SECTION, 0, 0);
+	check_repeated ("OBJECT-COMPUTER", SYN_CLAUSE_2, &check_comp_duplicate);
   }
   _object_computer_entry
-  {
-	cobc_cs_check = 0;
-  }
 ;
 
 _object_computer_entry:
@@ -2874,7 +2636,7 @@ object_clauses:
 ;
 
 object_computer_memory:
-  MEMORY _size _is integer object_char_or_word_or_modules
+  MEMORY SIZE _is integer object_char_or_word
   {
 	cb_verify (cb_memory_size_clause, "MEMORY SIZE");
   }
@@ -2891,15 +2653,6 @@ object_computer_sequence:
 object_computer_segment:
   SEGMENT_LIMIT _is integer
   {
-	int segnum;
-	
-	if (cb_verify (cb_section_segments, "SEGMENT LIMIT")) {
-		segnum = cb_get_int ($3);
-		if (segnum == 0 || segnum > 49) {
-			cb_error (_("segment-number must be in range of values 1 to 49"));
-			$$ = NULL;
-		}
-	}
 	/* Ignore */
   }
 ;
@@ -2942,11 +2695,7 @@ computer_words:
 /* REPOSITORY paragraph */
 
 _repository_paragraph:
-| repository_paragraph
-;
-
-repository_paragraph:
-  REPOSITORY TOK_DOT
+| REPOSITORY TOK_DOT
   {
 	check_headers_present (COBC_HD_ENVIRONMENT_DIVISION,
 			       COBC_HD_CONFIGURATION_SECTION, 0, 0);
@@ -2989,10 +2738,6 @@ repository_name:
 		setup_prototype ($2, $3, CB_PROGRAM_TYPE, 0);
 	}
   }
-| FUNCTION repository_name_list error
-  {
-	  yyerrok;
-  }
 ;
 
 repository_name_list:
@@ -3012,16 +2757,7 @@ repository_name_list:
 /* SPECIAL-NAMES paragraph */
 
 _special_names_paragraph:
-| special_names_paragraph
-;
-
-special_names_paragraph:
-  special_names_header _special_names_sentence_list
-| special_names_sentence_list
-;
-
-special_names_header:
-  SPECIAL_NAMES TOK_DOT
+| SPECIAL_NAMES TOK_DOT
   {
 	check_duplicate = 0;
 	check_headers_present (COBC_HD_ENVIRONMENT_DIVISION,
@@ -3034,7 +2770,6 @@ special_names_header:
 ;
 
 _special_names_sentence_list:
-  /* empty */
 | special_names_sentence_list
 ;
 
@@ -3086,7 +2821,7 @@ mnemonic_name_clause:
 			system_name [6] = ' ';
 		}
 		/* lookup system name */
-		save_tree = get_system_name (system_name);
+		save_tree = lookup_system_name (system_name);
 		if (!save_tree) {
 			cb_error_x ($1, _("invalid system-name '%s'"), system_name);
 		}
@@ -3117,12 +2852,6 @@ mnemonic_choices:
 			cb_define ($3, save_tree);
 			CB_CHAIN_PAIR (current_program->mnemonic_spec_list,
 					$3, save_tree);
-			/* remove non-standard context-sensitive words when identical to mnemonic */
-			if (strcasecmp (CB_NAME($3), "EXTERN") == 0 ||
-			    strcasecmp (CB_NAME($3), "STDCALL") == 0 ||
-			    strcasecmp (CB_NAME($3), "STATIC") == 0) {
-				remove_context_sensitivity (CB_NAME($3), CB_CS_CALL);
-			}
 		}
 	}
   }
@@ -3306,7 +3035,7 @@ space_or_zero:
 /* SYMBOLIC characters clause */
 
 symbolic_characters_clause:
-  symbolic_collection _sym_in_word
+  _symbolic_collection _sym_in_word
   {
 	check_headers_present (COBC_HD_ENVIRONMENT_DIVISION,
 			       COBC_HD_CONFIGURATION_SECTION,
@@ -3330,7 +3059,7 @@ _sym_in_word:
   }
 ;
 
-symbolic_collection:
+_symbolic_collection:
   %prec SHIFT_PREFER
   SYMBOLIC _characters symbolic_chars_list
   {
@@ -3723,24 +3452,19 @@ file_control_entry:
 		/* Add file to current program list */
 		CB_ADD_TO_CHAIN (CB_TREE (current_file),
 				 current_program->file_list);
-	} else if (current_program->file_list) {
-		current_program->file_list
-			= CB_CHAIN (current_program->file_list);
+	} else {
+		current_file = NULL;
+		if (current_program->file_list) {
+			current_program->file_list
+				= CB_CHAIN (current_program->file_list);
+		}
 	}
   }
-  _select_clauses_or_error
+  _select_clause_sequence TOK_DOT
   {
 	if (CB_VALID_TREE ($3)) {
 		validate_file (current_file, $3);
 	}
-  }
-;
-
-_select_clauses_or_error:
-  _select_clause_sequence TOK_DOT
-| error TOK_DOT
-  {
-	yyerrok;
   }
 ;
 
@@ -3834,13 +3558,13 @@ assign_clause:
 		current_file->flag_ext_assign = 0;
 		if ($4 == cb_int0) {
 			current_file->assign =
-				cb_build_alphanumeric_literal ("PRINTER", (size_t)7);
+				cb_build_alphanumeric_literal ("PRINTER",	(size_t)7);
 		} else if ($4 == cb_int1) {
 			current_file->assign =
-				cb_build_alphanumeric_literal ("PRINTER-1", (size_t)9);
+				cb_build_alphanumeric_literal ("PRINTER-1",	(size_t)9);
 		} else {
 			current_file->assign =
-				cb_build_alphanumeric_literal ("LPT1", (size_t)4);
+				cb_build_alphanumeric_literal ("LPT1",	(size_t)4);
 		}
 
 	}
@@ -3942,7 +3666,9 @@ alternative_record_key_clause:
 		current_file->alt_key_list = p;
 	} else {
 		l = current_file->alt_key_list;
-		for (; l->next; l = l->next) { ; }
+		for (; l->next; l = l->next) {
+			;
+		}
 		l->next = p;
 	}
   }
@@ -4401,7 +4127,9 @@ record_clause:
   {
 	check_repeated ("RECORD", SYN_CLAUSE_4, &check_duplicate);
 	if (current_file->organization == COB_ORG_LINE_SEQUENTIAL) {
-		cb_warning (warningopt, _("RECORD clause ignored for LINE SEQUENTIAL"));
+		if (warningopt) {
+			cb_warning (_("RECORD clause ignored for LINE SEQUENTIAL"));
+		}
 	} else {
 		current_file->record_max = cb_get_int ($3);
 		if (current_file->record_max < 1)  {
@@ -4421,7 +4149,9 @@ record_clause:
 
 	check_repeated ("RECORD", SYN_CLAUSE_4, &check_duplicate);
 	if (current_file->organization == COB_ORG_LINE_SEQUENTIAL) {
-		cb_warning (warningopt, _("RECORD clause ignored for LINE SEQUENTIAL"));
+		if (warningopt) {
+			cb_warning (_("RECORD clause ignored for LINE SEQUENTIAL"));
+		}
 	} else {
 		current_file->record_min = cb_get_int ($3);
 		current_file->record_max = cb_get_int ($5);
@@ -4648,8 +4378,8 @@ code_set_clause:
 			current_file->code_set = al;
 			break;
 		default:
-			if (CB_VALID_TREE ($3)) {
-				cb_warning_x (warningopt, $3, _("ignoring CODE-SET '%s'"),
+			if (warningopt && CB_VALID_TREE ($3)) {
+				cb_warning_x ($3, _("ignoring CODE-SET '%s'"),
 						  cb_name ($3));
 			}
 			break;
@@ -4888,13 +4618,12 @@ _record_description_list:
   {
 	$$ = NULL;
   }
-|
-  {
+| {
 	current_field = NULL;
 	description_field = NULL;
 	cb_clear_real_field ();
   }
-  record_description_list
+  record_description_list_2
   {
 	struct cb_field *p;
 
@@ -4905,9 +4634,9 @@ _record_description_list:
   }
 ;
 
-record_description_list:
+record_description_list_2:
   data_description TOK_DOT
-| record_description_list data_description TOK_DOT
+| record_description_list_2 data_description TOK_DOT
 ;
 
 data_description:
@@ -4948,17 +4677,17 @@ level_number:
   }
 ;
 
-_filler:
-  /* empty */
-| FILLER
-;
-
 _entry_name:
-  _filler
+  /* empty */
   {
 	$$ = cb_build_filler ();
 	qualifier = NULL;
-	keys_list = NULL;
+	non_const_word = 0;
+  }
+| FILLER
+  {
+	$$ = cb_build_filler ();
+	qualifier = NULL;
 	non_const_word = 0;
   }
 | user_entry_name
@@ -4969,7 +4698,6 @@ user_entry_name:
   {
 	$$ = $1;
 	qualifier = $1;
-	keys_list = NULL;
 	non_const_word = 0;
   }
 ;
@@ -4994,7 +4722,6 @@ lit_or_length:
   literal				{ $$ = $1; }
 | LENGTH_OF con_identifier		{ $$ = cb_build_const_length ($2); }
 | LENGTH con_identifier			{ $$ = cb_build_const_length ($2); }
-/* note: only reserved in context of CB_CS_CONSTANT: */
 | BYTE_LENGTH _of con_identifier	{ $$ = cb_build_const_length ($3); }
 ;
 
@@ -5139,19 +4866,15 @@ constant_entry:
 	if (level != 1) {
 		cb_error (_("CONSTANT item not at 01 level"));
 	} else if ($5) {
-		if (cb_verify(cb_constant_01, "01 CONSTANT")) {
-			x = cb_build_constant ($2, $5);
-			CB_FIELD (x)->flag_item_78 = 1;
-			CB_FIELD (x)->flag_constant = 1;
-			CB_FIELD (x)->level = 1;
-			CB_FIELD (x)->values = $5;
-			cb_needs_01 = 1;
-			if ($4) {
-				CB_FIELD (x)->flag_is_global = 1;
-			}
-			/* Ignore return value */
-			(void)cb_validate_78_item (CB_FIELD (x), 0);
+		x = cb_build_constant ($2, $5);
+		CB_FIELD (x)->flag_item_78 = 1;
+		CB_FIELD (x)->level = 1;
+		cb_needs_01 = 1;
+		if ($4) {
+			CB_FIELD (x)->flag_is_global = 1;
 		}
+		/* Ignore return value */
+		(void)cb_validate_78_item (CB_FIELD (x), 0);
 	}
   }
 | SEVENTY_EIGHT user_entry_name
@@ -5160,8 +4883,7 @@ constant_entry:
 		YYERROR;
 	}
   }
-  _global_clause
-  VALUE _is constant_78_source
+  _global_clause value_clause
   {
 	/* Reset to last non-78 item */
 	current_field = cb_validate_78_item (current_field, 0);
@@ -5169,47 +4891,15 @@ constant_entry:
 ;
 
 constant_source:
-  _as value_item_list 
+  _as lit_or_length
   {
 	$$ = $2;
   }
-| FROM WORD	
-  { 
-	$$ = CB_LIST_INIT(cb_build_const_from ($2));
-  }
-;
-
-constant_78_source:
-  constant_expression_list
+| FROM WORD
   {
-	current_field->values = $1;
+	CB_PENDING ("CONSTANT FROM");
+	$$ = NULL;
   }
-| START _of identifier
-  {
-	current_field->values = CB_LIST_INIT (cb_build_const_start (current_field, $3));
-  }
-| NEXT
-  {
-	current_field->values = CB_LIST_INIT (cb_build_const_next (current_field));
-  }
-;
-
-constant_expression_list:
-  constant_expression			{ $$ = CB_LIST_INIT ($1); }
-| constant_expression_list constant_expression	{ $$ = cb_list_add ($1, $2); }
-;
-
-constant_expression:
-  lit_or_length			{ $$ = $1; }
-| TOK_OPEN_PAREN		{ $$ = cb_build_alphanumeric_literal ("(", 1); }
-| TOK_CLOSE_PAREN		{ $$ = cb_build_alphanumeric_literal (")", 1); }
-| TOK_PLUS				{ $$ = cb_build_alphanumeric_literal ("+", 1); }
-| TOK_MINUS				{ $$ = cb_build_alphanumeric_literal ("-", 1); }
-| TOK_MUL				{ $$ = cb_build_alphanumeric_literal ("*", 1); }
-| TOK_DIV				{ $$ = cb_build_alphanumeric_literal ("/", 1); }
-| AND					{ $$ = cb_build_alphanumeric_literal ("&", 1); }
-| OR					{ $$ = cb_build_alphanumeric_literal ("|", 1); }
-| EXPONENTIATION		{ $$ = cb_build_alphanumeric_literal ("^", 1); }
 ;
 
 _data_description_clause_sequence:
@@ -5251,7 +4941,7 @@ redefines_clause:
 	check_repeated ("REDEFINES", SYN_CLAUSE_1, &check_pic_duplicate);
 	if ($0 != NULL) {
 		if (cb_relaxed_syntax_checks) {
-			cb_warning_x (COBC_WARN_FILLER, $2, _("REDEFINES clause should follow entry-name"));
+			cb_warning_x ($2, _("REDEFINES clause should follow entry-name"));
 		} else {
 			cb_error_x ($2, _("REDEFINES clause must follow entry-name"));
 		}
@@ -5413,41 +5103,6 @@ usage:
 	check_and_set_usage (CB_USAGE_PROGRAM_POINTER);
 	current_field->flag_is_pointer = 1;
   }
-| HANDLE
-  {
-	check_and_set_usage (CB_USAGE_HNDL);
-  }
-| HANDLE _of WINDOW
-  {
-	check_and_set_usage (CB_USAGE_HNDL_WINDOW);
-  }
-| HANDLE _of SUBWINDOW
-  {
-	check_and_set_usage (CB_USAGE_HNDL_SUBWINDOW);
-  }
-| HANDLE _of FONT _font_name
-  {
-	check_and_set_usage (CB_USAGE_HNDL_FONT);
-	CB_PENDING ("HANDLE OF FONT");
-  }
-| HANDLE _of THREAD
-  {
-	check_and_set_usage (CB_USAGE_HNDL_THREAD);
-  }
-| HANDLE _of MENU
-  {
-	check_and_set_usage (CB_USAGE_HNDL_MENU);
-	CB_PENDING ("HANDLE OF MENU");
-  }
-| HANDLE _of VARIANT
-  {
-	check_and_set_usage (CB_USAGE_HNDL_VARIANT);
-  }
-| HANDLE _of LAYOUT_MANAGER _layout_name
-  {
-	check_and_set_usage (CB_USAGE_HNDL_LM);
-	CB_PENDING ("HANDLE OF LAYOUT-MANAGER");
-  }
 | SIGNED_SHORT
   {
 	check_and_set_usage (CB_USAGE_SIGNED_SHORT);
@@ -5565,21 +5220,6 @@ double_usage:
 | FLOAT_LONG
 ;
 
-_font_name:
-  /* empty */
-| DEFAULT_FONT
-| FIXED_FONT
-| TRADITIONAL_FONT
-| SMALL_FONT
-| MEDIUM_FONT
-| LARGE_FONT
-;
-
-_layout_name:
-  /* empty */
-| LM_RESIZE
-;
-
 /* SIGN clause */
 
 sign_clause:
@@ -5623,14 +5263,14 @@ _occurs_step:
 
 occurs_clause:
   OCCURS integer _occurs_to_integer _times
-  _occurs_depending _occurs_keys_and_indexed
+  _occurs_depending _occurs_keys _occurs_indexed
   {
 	/* most of the field attributes are set when parsing the phrases */;
 	setup_occurs ();
 	setup_occurs_min_max ($2, $3);
   }
 | OCCURS _occurs_integer_to UNBOUNDED _times
-  DEPENDING _on reference _occurs_keys_and_indexed
+  DEPENDING _on reference _occurs_keys _occurs_indexed
   {
 	current_field->flag_unbounded = 1;
 	if (current_field->parent) {
@@ -5642,7 +5282,7 @@ occurs_clause:
 	setup_occurs_min_max ($2, cb_int0);
   }
 | OCCURS DYNAMIC _capacity_in _occurs_from_integer
-  _occurs_to_integer _occurs_initialized _occurs_keys_and_indexed
+  _occurs_to_integer _occurs_initialized _occurs_keys _occurs_indexed
   {
 	setup_occurs ();
 	current_field->occurs_min = $4 ? cb_get_int ($4) : 0;
@@ -5683,7 +5323,7 @@ _capacity_in:
 | CAPACITY _in WORD
   {
 	$$ = cb_build_index ($3, cb_zero, 0, current_field);
-	CB_FIELD_PTR ($$)->special_index = 1U;
+	CB_FIELD_PTR ($$)->special_index = 1;
   }
 ;
 
@@ -5694,24 +5334,8 @@ _occurs_initialized:
   }
 ;
 
-_occurs_keys_and_indexed:
-  /* empty */
-| occurs_keys occurs_indexed
-| occurs_indexed
-  {
-	if (!cb_relaxed_syntax_checks) {
-		cb_error (_("INDEXED should follow ASCENDING/DESCENDING"));
-	} else {
-		cb_warning (warningopt, _("INDEXED should follow ASCENDING/DESCENDING"));
-	}
-  }
-  occurs_keys
-| occurs_indexed
-| occurs_keys
-;
-
-occurs_keys:
-  occurs_key_list
+_occurs_keys:
+  _occurs_key_list
   {
 	if ($1) {
 		cb_tree		l;
@@ -5734,25 +5358,21 @@ occurs_keys:
   }
 ;
 
-occurs_key_list:
-  occurs_key_field
-| occurs_key_field occurs_key_list
-;
-
-occurs_key_field:
+_occurs_key_list:
+  /* empty */			{ $$ = NULL; }
+| _occurs_key_list
   ascending_or_descending _key _is reference_list
   {
 	cb_tree l;
 
-	for (l = $4; l; l = CB_CHAIN (l)) {
-		CB_PURPOSE (l) = $1;
+	for (l = $5; l; l = CB_CHAIN (l)) {
+		CB_PURPOSE (l) = $2;
 		if (qualifier && !CB_REFERENCE(CB_VALUE(l))->chain &&
 		    strcasecmp (CB_NAME(CB_VALUE(l)), CB_NAME(qualifier))) {
 			CB_REFERENCE(CB_VALUE(l))->chain = qualifier;
 		}
 	}
-	keys_list = cb_list_append (keys_list, $4);
-	$$ = keys_list;
+	$$ = cb_list_append ($1, $5);
   }
 ;
 
@@ -5762,11 +5382,7 @@ ascending_or_descending:
 ;
 
 _occurs_indexed:
-  /* empty */
-| occurs_indexed
-;
-occurs_indexed:
-  INDEXED _by occurs_index_list
+| INDEXED _by occurs_index_list
   {
 	current_field->index_list = $3;
   }
@@ -5782,7 +5398,7 @@ occurs_index:
   WORD
   {
 	$$ = cb_build_index ($1, cb_int1, 1U, current_field);
-	CB_FIELD_PTR ($$)->special_index = 1U;
+	CB_FIELD_PTR ($$)->special_index = 1;
   }
 ;
 
@@ -5865,12 +5481,11 @@ value_item_list:
 ;
 
 value_item:
-  lit_or_length THRU lit_or_length		{ $$ = CB_BUILD_PAIR ($1, $3); }
-| constant_expression
+  lit_or_length				{ $$ = $1; }
+| lit_or_length THRU lit_or_length	{ $$ = CB_BUILD_PAIR ($1, $3); }
 ;
 
 _false_is:
-  /* empty */
 | _when_set_to TOK_FALSE _is lit_or_length
   {
 	if (current_field->level != 88) {
@@ -6007,6 +5622,11 @@ control_clause:
 
 control_field_list:
   _final identifier_list
+;
+
+identifier_list:
+  identifier
+| identifier_list identifier
 ;
 
 /* PAGE clause */
@@ -6387,7 +6007,6 @@ screen_description:
 ;
 
 _screen_options:
-  /* empty */
 | _screen_options screen_option
 ;
 
@@ -6498,13 +6117,15 @@ screen_option:
   {
 	set_screen_attr ("INITIAL", COB_SCREEN_INITIAL);
   }
-| LINE screen_line_number
+| LINE _number _is _screen_line_plus_minus num_id_or_lit
   {
 	check_repeated ("LINE", SYN_CLAUSE_16, &check_pic_duplicate);
+	current_field->screen_line = $5;
   }
-| column_or_col screen_col_number
+| column_or_col _number _is _screen_col_plus_minus num_id_or_lit
   {
 	check_repeated ("COLUMN", SYN_CLAUSE_17, &check_pic_duplicate);
+	current_field->screen_column = $5;
   }
 | FOREGROUND_COLOR _is num_id_or_lit
   {
@@ -6518,7 +6139,7 @@ screen_option:
   }
 | usage_clause
 | blank_clause
-| screen_global_clause
+| global_screen_opt
 | justified_clause
 | sign_clause
 | value_clause
@@ -6568,15 +6189,6 @@ minus_minus:
 | TOK_MINUS
 ;
 
-screen_line_number:
-  _number _is _screen_line_plus_minus num_id_or_lit
-  {
-	if ($4) {
-		current_field->screen_line = $4;
-	}
-  }
-;
-
 _screen_line_plus_minus:
   /* empty */
   {
@@ -6589,15 +6201,6 @@ _screen_line_plus_minus:
 | minus_minus
   {
 	current_field->screen_flag |= COB_SCREEN_LINE_MINUS;
-  }
-;
-
-screen_col_number:
-  _number _is _screen_col_plus_minus num_id_or_lit
-  {
-	if ($4) {
-		current_field->screen_column = $4;
-	}
   }
 ;
 
@@ -6616,6 +6219,7 @@ _screen_col_plus_minus:
   }
 ;
 
+
 screen_occurs_clause:
   OCCURS integer _times
   {
@@ -6627,27 +6231,17 @@ screen_occurs_clause:
   }
 ;
 
-screen_global_clause:
+global_screen_opt:
   _is GLOBAL
   {
-	CB_PENDING (_("GLOBAL screen items"));
+	cb_error (_("GLOBAL is not allowed with screen items"));
   }
 ;
 
 /* PROCEDURE DIVISION */
 
 _procedure_division:
-  /* empty */
-  {
-	current_section = NULL;
-	current_paragraph = NULL;
-	check_pic_duplicate = 0;
-	check_duplicate = 0;
-	if (!current_program->entry_convention) {
-		current_program->entry_convention = cb_int (CB_CONV_COBOL);
-	}
-  }
-| PROCEDURE DIVISION _mnemonic_conv _procedure_using_chaining _procedure_returning TOK_DOT
+| PROCEDURE DIVISION _procedure_using_chaining _procedure_returning TOK_DOT
   {
 	current_section = NULL;
 	current_paragraph = NULL;
@@ -6655,26 +6249,18 @@ _procedure_division:
 	check_duplicate = 0;
 	cobc_in_procedure = 1U;
 	cb_set_system_names ();
-	if ($3) {
-		if (current_program->entry_convention) {
-			cb_warning (COBC_WARN_FILLER, _("overriding convention specified in ENTRY-CONVENTION"));
-		}
-		current_program->entry_convention = $3;
-	} else if (!current_program->entry_convention) {
-		current_program->entry_convention = cb_int (CB_CONV_COBOL);
-	}
 	header_check |= COBC_HD_PROCEDURE_DIVISION;
   }
   _procedure_declaratives
   {
-	if (current_program->flag_main && !current_program->flag_chained && $4) {
+	if (current_program->flag_main && !current_program->flag_chained && $3) {
 		cb_error (_("executable program requested but PROCEDURE/ENTRY has USING clause"));
 	}
 	/* Main entry point */
-	emit_entry (current_program->program_id, 0, $4, NULL);
-	current_program->num_proc_params = cb_list_length ($4);
+	emit_entry (current_program->program_id, 0, $3);
+	current_program->num_proc_params = cb_list_length ($3);
 	if (current_program->source_name) {
-		emit_entry (current_program->source_name, 1, $4, NULL);
+		emit_entry (current_program->source_name, 1, $3);
 	}
   }
   _procedure_list
@@ -6696,14 +6282,11 @@ _procedure_division:
   {
 	cb_tree label;
 
-	/* No PROCEDURE DIVISION header here */
+	/* No PROCEDURE DIVISION header ! */
 	/* Only a statement is allowed as first element */
 	/* Thereafter, sections/paragraphs may be used */
 	check_pic_duplicate = 0;
 	check_duplicate = 0;
-	if (!current_program->entry_convention) {
-		current_program->entry_convention = cb_int (CB_CONV_COBOL);
-	}
 	cobc_in_procedure = 1U;
 	label = cb_build_reference ("MAIN SECTION");
 	current_section = CB_LABEL (cb_build_label (label, NULL));
@@ -6838,20 +6421,38 @@ _size_optional:
 		size_mode = CB_SIZE_AUTO | CB_SIZE_UNSIGNED;
 	}
   }
-| UNSIGNED size_is_integer
+| UNSIGNED SIZE _is integer
   {
-	if (size_mode) {
-		size_mode |= CB_SIZE_UNSIGNED;
+	unsigned char *s = CB_LITERAL ($4)->data;
+
+	if (call_mode != CB_CALL_BY_VALUE) {
+		cb_error (_("SIZE only allowed for BY VALUE items"));
+	} else if (CB_LITERAL ($4)->size != 1) {
+		cb_error_x ($4, _("invalid value for SIZE"));
+	} else {
+		size_mode = CB_SIZE_UNSIGNED;
+		switch (*s) {
+		case '1':
+			size_mode |= CB_SIZE_1;
+			break;
+		case '2':
+			size_mode |= CB_SIZE_2;
+			break;
+		case '4':
+			size_mode |= CB_SIZE_4;
+			break;
+		case '8':
+			size_mode |= CB_SIZE_8;
+			break;
+		default:
+			cb_error_x ($4, _("invalid value for SIZE"));
+			break;
+		}
 	}
   }
-| size_is_integer
-;
-
-size_is_integer:
-  SIZE _is integer
+| SIZE _is integer
   {
 	unsigned char *s = CB_LITERAL ($3)->data;
-	size_mode = 0;
 
 	if (call_mode != CB_CALL_BY_VALUE) {
 		cb_error (_("SIZE only allowed for BY VALUE items"));
@@ -6919,14 +6520,17 @@ _procedure_returning:
 
 	if (cb_ref ($2) != cb_error_node) {
 		f = CB_FIELD_PTR ($2);
-		/* standard rule: returning item is allocated in the
-		   activating runtime element */
+/* RXWRXW
 		if (f->storage != CB_STORAGE_LINKAGE) {
 			cb_error (_("RETURNING item is not defined in LINKAGE SECTION"));
 		} else if (f->level != 1 && f->level != 77) {
+*/
+		if (f->level != 1 && f->level != 77) {
 			cb_error (_("RETURNING item must have level 01"));
 		} else if (f->flag_occurs) {
 			cb_error (_("RETURNING item should not have OCCURS"));
+		} else if (f->storage == CB_STORAGE_LOCAL) {
+			cb_error (_("RETURNING item should not be in LOCAL-STORAGE"));
 		} else {
 			if (current_program->prog_type == CB_FUNCTION_TYPE) {
 				if (f->flag_any_length) {
@@ -7014,7 +6618,7 @@ procedure:
 /* Section/Paragraph */
 
 section_header:
-  WORD SECTION
+  WORD SECTION _segment TOK_DOT
   {
 	non_const_word = 0;
 	check_unreached = 0;
@@ -7046,6 +6650,9 @@ section_header:
 
 	/* Begin a new section */
 	current_section = CB_LABEL (cb_build_label ($1, NULL));
+	if ($3) {
+		current_section->segment = cb_get_int ($3);
+	}
 	current_section->flag_section = 1;
 	/* Careful here, one negation */
 	current_section->flag_real_label = !in_debugging;
@@ -7055,7 +6662,6 @@ section_header:
 	CB_TREE (current_section)->source_line = cb_source_line;
 	current_paragraph = NULL;
   }
-  _segment TOK_DOT
   _use_statement
   {
 	emit_statement (CB_TREE (current_section));
@@ -7141,25 +6747,14 @@ _segment:
   }
 | integer
   {
-	int segnum = cb_get_int ($1);
-	
-	$$ = NULL;
-	if (cb_verify (cb_section_segments, "SECTION segment")) {
-		if (segnum > 99) {
-			cb_error (_("SECTION segment-number must be less than or equal to 99"));
-		} else {
-			if (in_declaratives && segnum > 49) {
-				cb_error (_("SECTION segment-number in DECLARATIVES must be less than 50"));
-			}
-			if (!in_declaratives) {
-				current_program->flag_segments = 1;
-				current_section->segment = segnum;
-			} else {
-				/* Simon: old version did not allow segments in declaratives at all
-					ToDo: check codegen for possible missing parts */
-				CB_PENDING (_("SECTION segment within DECLARATIVES"));
-			}
-		}
+	if (in_declaratives) {
+		cb_error (_("SECTION segment invalid within DECLARATIVE"));
+	}
+	if (cb_verify (cb_section_segments, _("SECTION segment"))) {
+		current_program->flag_segments = 1;
+		$$ = $1;
+	} else {
+		$$ = NULL;
 	}
   }
 ;
@@ -7213,11 +6808,7 @@ statements:
 		CB_TREE (current_paragraph)->source_line = cb_source_line;
 		emit_statement (CB_TREE (current_paragraph));
 	}
-	if (check_headers_present (COBC_HD_PROCEDURE_DIVISION, 0, 0, 0) == 1) {
-		if (current_program->prog_type == CB_PROGRAM_TYPE) {
-			emit_entry (current_program->program_id, 0, NULL, NULL);
-		}
-	}
+	check_headers_present (COBC_HD_PROCEDURE_DIVISION, 0, 0, 0);
   }
   statement
   {
@@ -7241,7 +6832,6 @@ statement:
 | compute_statement
 | continue_statement
 | delete_statement
-| destroy_statement
 | disable_statement
 | display_statement
 | divide_statement
@@ -7285,8 +6875,7 @@ statement:
 | unlock_statement
 | unstring_statement
 | write_statement
-| %prec SHIFT_PREFER
-  NEXT SENTENCE
+| %prec SHIFT_PREFER NEXT SENTENCE
   {
 	if (cb_verify (cb_next_sentence_phrase, "NEXT SENTENCE")) {
 		cb_tree label;
@@ -7764,11 +7353,6 @@ add_body:
   {
 	cb_emit_corresponding (cb_build_add, $4, $2, $5);
   }
-| TABLE table_identifier TO table_identifier flag_rounded _from_idx_to_idx _dest_index on_size_error_phrases
-  {
-	CB_PENDING ("ADD TABLE");
-	cb_emit_tab_arithmetic (cb_build_add, $4, $2, $5, $6, $7);
-  }
 ;
 
 _add_to:
@@ -7796,7 +7380,6 @@ allocate_statement:
   ALLOCATE
   {
 	begin_statement ("ALLOCATE", 0);
-	cobc_cs_check = CB_CS_ALLOCATE;
 	current_statement->flag_no_based = 1;
   }
   allocate_body
@@ -7859,75 +7442,58 @@ call_statement:
 	cobc_cs_check = CB_CS_CALL;
 	call_nothing = 0;
 	cobc_allow_program_name = 1;
-	call_line_number = cb_source_line;
   }
   call_body
   end_call
 ;
 
 call_body:
-  _mnemonic_conv _thread_start program_or_prototype
+  mnemonic_conv id_or_lit_or_func_or_program_name
   {
 	cobc_allow_program_name = 0;
   }
-  _thread_handle
   call_using
   call_returning
   call_exception_phrases
   {
-	int call_conv = 0;
+	cb_tree	call_conv_bit;
 
 	if (current_program->prog_type == CB_PROGRAM_TYPE
 	    && !current_program->flag_recursive
-	    && is_recursive_call ($3)) {
-		cb_warning_x (COBC_WARN_FILLER, $3, _("recursive program call - assuming RECURSIVE attribute"));
+	    && is_recursive_call ($2)) {
+		cb_warning_x ($2, _("recursive program call - assuming RECURSIVE attribute"));
 		current_program->flag_recursive = 1;
-	}
-	call_conv = current_call_convention;
-	if ($1) {
-		if (CB_INTEGER_P ($1)) {
-			call_conv |= CB_INTEGER ($1)->val;
-			if (CB_INTEGER ($1)->val & CB_CONV_COBOL) {
-				call_conv &= ~CB_CONV_STDCALL;
-			} else {
-				call_conv &= ~CB_CONV_COBOL;
-			}
-		} else {
-			call_conv = cb_get_int($1);
-		}
 	}
 	/* For CALL ... RETURNING NOTHING, set the call convention bit */
 	if (call_nothing) {
-		call_conv |= CB_CONV_NO_RET_UPD;
+		if ($1 && CB_INTEGER_P ($1)) {
+			call_conv_bit = cb_int ((CB_INTEGER ($1)->val)
+						| CB_CONV_NO_RET_UPD);
+		} else {
+			call_conv_bit = cb_int (CB_CONV_NO_RET_UPD);
+		}
+	} else {
+		call_conv_bit = $1;
 	}
-	cb_emit_call ($3, $6, $7, CB_PAIR_X ($8), CB_PAIR_Y ($8),
-		      cb_int (call_conv), $2, $5);
+	cb_emit_call ($2, $4, $5, CB_PAIR_X ($6), CB_PAIR_Y ($6),
+		      call_conv_bit);
   }
 ;
 
-_mnemonic_conv:
+mnemonic_conv:
   /* empty */
   {
 	$$ = NULL;
 	cobc_cs_check = 0;
   }
-| STATIC	/* not active for ENTRY-CONVENTION via PROCEDURE DIVISION */
+| STATIC
   {
-	if (current_call_convention & CB_CONV_COBOL) {
-		$$ = cb_int (CB_CONV_STATIC_LINK | CB_CONV_COBOL);
-	} else {
-		$$ = cb_int (CB_CONV_STATIC_LINK);
-	}
+	$$ = cb_int (CB_CONV_STATIC_LINK);
 	cobc_cs_check = 0;
   }
-| STDCALL	/* not active for ENTRY-CONVENTION via PROCEDURE DIVISION */
+| STDCALL
   {
 	$$ = cb_int (CB_CONV_STDCALL);
-	cobc_cs_check = 0;
-  }
-| TOK_EXTERN	/* not active for ENTRY-CONVENTION via PROCEDURE DIVISION */
-  {
-	$$ = cb_int (0);
 	cobc_cs_check = 0;
   }
 | MNEMONIC_NAME
@@ -7949,52 +7515,17 @@ _mnemonic_conv:
   }
 ;
 
-program_or_prototype:
+id_or_lit_or_func_or_program_name:
   id_or_lit_or_func
   {
 	if (CB_LITERAL_P ($1)) {
 		cb_trim_program_id ($1);
 	}
   }
-| _id_or_lit_or_func_as nested_or_prototype
+| PROGRAM_NAME
   {
 	cb_verify (cb_program_prototypes, _("CALL/CANCEL with program-prototype-name"));
-	/* hack to push the prototype name */
-	if ($2 && CB_REFERENCE_P ($2)) {
-		if ($1) {
-			cb_warning_x (COBC_WARN_FILLER, $1, _("id/literal ignored, using prototype name"));
-		}
-		$$ = $2;
-	} else if ($1 && CB_LITERAL_P ($1)) {
-		$$ = $1;
-	} else {
-		cb_error (_("NESTED phrase is only valid with literal"));
-		$$ = cb_error_node;
-	}
   }
-;
-
-_id_or_lit_or_func_as:
-  /* empty */
-  {
-	$$ = NULL;
-  }
-|
-  id_or_lit_or_func AS
-  {
-	if (CB_LITERAL_P ($1)) {
-		cb_trim_program_id ($1);
-	}
-	$$ = $1;
-  }
-;
-
-nested_or_prototype:
-  NESTED
-  {
-	CB_PENDING ("NESTED phrase for CALL statement");
-  }
-| PROGRAM_NAME
 ;
 
 call_using:
@@ -8045,7 +7576,7 @@ call_param:
 				    _("invalid file name reference"));
 		} else if (call_mode == CB_CALL_BY_VALUE) {
 			if (cb_category_is_alpha ($3)) {
-				cb_warning_x (COBC_WARN_FILLER, $3,
+				cb_warning_x ($3,
 					      _("BY CONTENT assumed for alphanumeric item"));
 				save_mode = CB_CALL_BY_CONTENT;
 			}
@@ -8249,50 +7780,24 @@ close_statement:
 ;
 
 close_body:
-  close_files
-| close_window
-;
-
-close_files:
-  file_name _close_option
+  file_name close_option
   {
 	begin_implicit_statement ();
 	cb_emit_close ($1, $2);
   }
-| close_files file_name _close_option
+| close_body file_name close_option
   {
 	begin_implicit_statement ();
 	cb_emit_close ($2, $3);
   }
 ;
 
-_close_option:
+close_option:
   /* empty */			{ $$ = cb_int (COB_CLOSE_NORMAL); }
 | reel_or_unit			{ $$ = cb_int (COB_CLOSE_UNIT); }
 | reel_or_unit _for REMOVAL	{ $$ = cb_int (COB_CLOSE_UNIT_REMOVAL); }
 | _with NO REWIND		{ $$ = cb_int (COB_CLOSE_NO_REWIND); }
 | _with LOCK			{ $$ = cb_int (COB_CLOSE_LOCK); }
-;
-
-close_window:
-  WINDOW
-  {
-	CB_PENDING ("GRAPHICAL WINDOW");
-	current_statement->name = "DISPLAY WINDOW";
-  }
-  identifier _close_display_option
-  {
-	if ($3) {
-		cb_emit_close_window ($2);
-	} else {
-		cb_emit_destroy ($2);
-	}
-  }
-;
-
-_close_display_option:
-  /* empty */			{ $$ = NULL; }
-| _with NO DISPLAY		{ $$ = cb_int0; }
 ;
 
 
@@ -8350,32 +7855,6 @@ continue_statement:
 	begin_statement ("CONTINUE", 0);
 	cb_emit_continue ();
 	check_unreached = (unsigned int) save_unreached;
-  }
-;
-
-
-/* DESTROY statement */
-
-destroy_statement:
-  DESTROY
-  {
-	begin_statement ("DESTROY", 0);
-	CB_PENDING ("GRAPHICAL CONTROL");
-  }
-  destroy_body
-;
-
-destroy_body:
-  ALL _controls
-  {
-	cb_emit_destroy (NULL);
-  }
-/* TODO for later: add Format 3, mixing identifier_list
-   with positions like in DISPLAY
-   (and error on this, destroy on position is bad...) */
-| identifier_list
-  {
-	cb_emit_destroy ($1);
   }
 ;
 
@@ -8488,9 +7967,6 @@ display_body:
 	cb_emit_command_line ($1);
   }
 | screen_or_device_display _display_exception_phrases
-| display_window
-| display_floating_window
-| display_initial_window
 ;
 
 screen_or_device_display:
@@ -8520,7 +7996,7 @@ display_atom:
   {
 	check_duplicate = 0;
 	check_line_col_duplicate = 0;
-	advancing_value = cb_int1;
+  	advancing_value = cb_int1;
 	upon_value = NULL;
 	line_column = NULL;
   }
@@ -8584,7 +8060,7 @@ display_clause:
   }
 | _with NO_ADVANCING
   {
-	check_repeated ("NO ADVANCING", SYN_CLAUSE_2, &check_duplicate);
+ 	check_repeated ("NO ADVANCING", SYN_CLAUSE_2, &check_duplicate);
 	advancing_value = cb_int0;
   }
 | mode_is_block
@@ -8619,146 +8095,6 @@ crt_under:
 | CRT_UNDER
 ;
 
-display_window:
-  sub_or_window
-  {
-	CB_PENDING ("GRAPHICAL WINDOW");
-	current_statement->name = "DISPLAY WINDOW";
-  }
-  _upon_window_handle
-  {
-	check_duplicate = 0;
-	check_line_col_duplicate = 0;
-	line_column = NULL;
-	upon_value = NULL; /* Hack: stores the POP-UP AREA */
-  }
-  display_window_clauses
-  {
-	cb_emit_display_window (NULL, upon_value, $2, line_column,
-			 current_statement->attr_ptr);
-  }
-;
-
-sub_or_window:
-  WINDOW
-| SUBWINDOW
-;
-
-display_floating_window:
-  FLOATING _graphical WINDOW
-  {
-	CB_PENDING ("GRAPHICAL WINDOW");
-	current_statement->name = "DISPLAY FLOATING WINDOW";
-  }
-  _upon_window_handle
-  {
-	check_duplicate = 0;
-	check_line_col_duplicate = 0;
-	line_column = NULL;
-	upon_value = NULL; /* Hack: stores the POP-UP AREA */
-  }
-  display_window_clauses
-  {
-	if ($2) {
-		/* TODO: set "CELL WIDTH" and "CELL HEIGHT" to "LABEL FONT" */
-		/* if not set already */
-	}
-	cb_emit_display_window (cb_int0, upon_value, $4, line_column,
-			 current_statement->attr_ptr);
-  }
-;
-
-display_initial_window:
-  intial_type _graphical WINDOW
-  {
-	CB_PENDING ("GRAPHICAL WINDOW");
-	current_statement->name = "DISPLAY INITIAL WINDOW";
-	check_duplicate = 0;
-	check_line_col_duplicate = 0;
-	line_column = NULL;
-	upon_value = NULL; /* Hack: stores the POP-UP AREA */
-  }
-  display_window_clauses
-  {
-	if ($2) {
-		/* TODO: set "CELL WIDTH" and "CELL HEIGHT" to "LABEL FONT" */
-		/* if not set already */
-	}
-	cb_emit_display_window ($1, upon_value, NULL, line_column,
-			 current_statement->attr_ptr);
-  }
-;
-
-intial_type:
-  TOK_INITIAL	{$$ = cb_int1;}
-| STANDARD	{$$ = cb_int2;}
-| INDEPENDENT	{$$ = cb_int3;}
-;
-
-_graphical:
-  /* empty */	{$$ = NULL;}
-| GRAPHICAL	{$$ = cb_int1;}
-;
-
-_upon_window_handle:
-  /* empty */
-  {
-	$$ = NULL;
-  }
-| UPON identifier
-  {
-	$$ = $2;
-  }
-;
-
-display_window_clauses:
-  display_window_clause
-| display_window_clauses display_window_clause
-;
-
-/* FIXME: has different clauses (some additional while some aren't in)
-          SCREEN is optional(=implied) for ERASE here */
-display_window_clause:
-  pop_up_or_handle	/* DISPLAY WINDOW actually only takes POP-UP */
-| LINES integer
-  {
-	/* TODO: store */
-  }
-| at_line_column
-| _with disp_attr
-;
-
-pop_up_or_handle:
-  pop_up_area
-| handle_is_in
-;
-
-pop_up_area:
-  POP_UP _area _is identifier
-  {
-	if (upon_value) {
-		emit_duplicate_clause_message("POP-UP AREA");
-	}
-	upon_value = $4;
-  }
-;
-
-handle_is_in:
-  HANDLE _is_in identifier
-  {
-	if (strcmp (current_statement->name, "DISPLAY WINDOW")) {
-		cb_error_x ($1, _("HANDLE clause invalid for %s"), 
-			current_statement->name);
-		upon_value = cb_error_node;
-	} else{
-		if (upon_value) {
-			emit_duplicate_clause_message("POP-UP AREA / HANDLE IN");
-		}
-		upon_value = $3;
-	}
-  }
-;
-
 disp_attr:
   BELL
   {
@@ -8785,7 +8121,7 @@ disp_attr:
 | CONVERSION
   {
 	check_repeated ("CONVERSION", SYN_CLAUSE_8, &check_duplicate);
-	cb_warning (COBC_WARN_FILLER, _("ignoring CONVERSION"));
+	cb_warning (_("ignoring CONVERSION"));
   }
 | ERASE eol
   {
@@ -8938,15 +8274,15 @@ entry_statement:
 ;
 
 entry_body:
-  _mnemonic_conv LITERAL call_using
+  LITERAL call_using
   {
 	if (current_program->nested_level) {
 		cb_error (_("%s is invalid in nested program"), "ENTRY");
 	} else if (current_program->prog_type == CB_FUNCTION_TYPE) {
 		cb_error (_("%s is invalid in a user FUNCTION"), "ENTRY");
 	} else if (cb_verify (cb_entry_statement, "ENTRY")) {
-		if (!cobc_check_valid_name ((char *)(CB_LITERAL ($2)->data), ENTRY_NAME)) {
-			emit_entry ((char *)(CB_LITERAL ($2)->data), 1, $3, $1);
+		if (!cobc_check_valid_name ((char *)(CB_LITERAL ($1)->data), ENTRY_NAME)) {
+			emit_entry ((char *)(CB_LITERAL ($1)->data), 1, $2);
 		}
 	}
   }
@@ -9034,8 +8370,7 @@ evaluate_condition_list:
   {
 	$$ = cb_list_add ($1, $2);
   }
-| evaluate_case_list
-  %prec SHIFT_PREFER
+| evaluate_case_list %prec SHIFT_PREFER
   {
 	$$ = $1;
   }
@@ -9186,7 +8521,6 @@ exit_statement:
 
 exit_body:
   /* empty */	%prec SHIFT_PREFER
-  /* TODO: add warning/error if there's another statement in the paragraph */
 | PROGRAM exit_program_returning
   {
 	if (in_declaratives && use_global_ind) {
@@ -9202,12 +8536,8 @@ exit_body:
 	} else {
 		check_unreached = 1;
 	}
-	if ($2) {
-		if (!current_program->cb_return_code) {
-			cb_error_x ($2, _("RETURNING/GIVING not allowed for non-returning sources"));
-		} else {
-			cb_emit_move ($2, CB_LIST_INIT (current_program->cb_return_code));
-		}
+	if ($2 != NULL) {
+		cb_emit_move ($2, CB_LIST_INIT (current_program->cb_return_code));
 	}
 	current_statement->name = (const char *)"EXIT PROGRAM";
 	cb_emit_exit (0);
@@ -9397,12 +8727,8 @@ goback_statement:
   {
 	begin_statement ("GOBACK", 0);
 	check_unreached = 1;
-	if ($2) {
-		if (!current_program->cb_return_code) {
-			cb_error_x ($2, _("RETURNING/GIVING not allowed for non-returning sources"));
-		} else {
-			cb_emit_move ($2, CB_LIST_INIT (current_program->cb_return_code));
-		}
+	if ($2 != NULL) {
+		cb_emit_move ($2, CB_LIST_INIT (current_program->cb_return_code));
 	}
 	cb_emit_exit (1U);
   }
@@ -9421,29 +8747,17 @@ if_statement:
 ;
 
 if_else_statements:
-  if_true statement_list ELSE if_false statement_list
+  statement_list ELSE statement_list
   {
-	cb_emit_if ($-1, $2, $5);
+	cb_emit_if ($-1, $1, $3);
   }
-| ELSE if_false statement_list
+| ELSE statement_list
   {
-	cb_emit_if ($-1, NULL, $3);
+	cb_emit_if ($-1, NULL, $2);
   }
-| if_true statement_list %prec SHIFT_PREFER
+| statement_list %prec SHIFT_PREFER
   {
-	cb_emit_if ($-1, $2, NULL);
-  }
-;
-
-if_true:
-  {
-	  cb_if_true();
-  }
-;
-
-if_false:
-  {
-	  cb_if_false();
+	cb_emit_if ($-1, $1, NULL);
   }
 ;
 
@@ -9451,12 +8765,10 @@ end_if:
   /* empty */	%prec SHIFT_PREFER
   {
 	TERMINATOR_WARNING ($-4, IF);
-	cb_if_end();
   }
 | END_IF
   {
 	TERMINATOR_CLEAR ($-4, IF);
-	cb_if_end();
   }
 ;
 
@@ -9472,25 +8784,25 @@ initialize_statement:
 ;
 
 initialize_body:
-  target_x_list _initialize_filler _initialize_value
-  _initialize_replacing _initialize_default
+  target_x_list initialize_filler initialize_value
+  initialize_replacing initialize_default
   {
 	cb_emit_initialize ($1, $2, $3, $4, $5);
   }
 ;
 
-_initialize_filler:
+initialize_filler:
   /* empty */			{ $$ = NULL; }
 | _with FILLER			{ $$ = cb_true; }
 ;
 
-_initialize_value:
+initialize_value:
   /* empty */			{ $$ = NULL; }
 | ALL _to VALUE			{ $$ = cb_true; }
 | initialize_category _to VALUE	{ $$ = $1; }
 ;
 
-_initialize_replacing:
+initialize_replacing:
   /* empty */
   {
 	$$ = NULL;
@@ -9528,7 +8840,7 @@ initialize_category:
 | NUMERIC_EDITED	{ $$ = cb_int (CB_CATEGORY_NUMERIC_EDITED); }
 | NATIONAL		{ $$ = cb_int (CB_CATEGORY_NATIONAL); }
 | NATIONAL_EDITED	{ $$ = cb_int (CB_CATEGORY_NATIONAL_EDITED); }
-/* missing, needs test when added:
+/* missing, needs test when added: 
 | BOOLEAN		{ $$ = cb_int (CB_CATEGORY_BOOLEAN); }
 | DATA_POINTER		{ $$ = cb_int (CB_CATEGORY_DATA_POINTER); }
 | FUNCTION_POINTER		{ $$ = cb_int (CB_CATEGORY_FUNCTION_POINTER); }
@@ -9537,7 +8849,7 @@ initialize_category:
 */
 ;
 
-_initialize_default:
+initialize_default:
   /* empty */
   {
 	$$ = NULL;
@@ -9924,20 +9236,15 @@ perform_statement:
 ;
 
 perform_body:
-  _thread_start
-  perform_procedure
-  _thread_handle
-  perform_option
+  perform_procedure perform_option
   {
-	cb_emit_perform ($4, $2, $1, $3);
+	cb_emit_perform ($2, $1);
 	start_debug = save_debug;
 	cobc_cs_check = 0;
   }
-| _thread_start
-  perform_option
-  _thread_handle
+| perform_option
   {
-	CB_ADD_TO_CHAIN ($2, perform_stack);
+	CB_ADD_TO_CHAIN ($1, perform_stack);
 	/* Restore field debug before inline statements */
 	start_debug = save_debug;
 	cobc_cs_check = 0;
@@ -9945,14 +9252,11 @@ perform_body:
   statement_list end_perform
   {
 	perform_stack = CB_CHAIN (perform_stack);
-	cb_emit_perform ($2, $5, $1, $3);
+	cb_emit_perform ($1, $3);
   }
-| _thread_start
-  perform_option
-  _thread_handle
-  term_or_dot
+| perform_option term_or_dot
   {
-	cb_emit_perform ($2, NULL, $1, $3);
+	cb_emit_perform ($1, NULL);
 	start_debug = save_debug;
 	cobc_cs_check = 0;
   }
@@ -10029,8 +9333,6 @@ perform_option:
 	if (!$3) {
 		$$ = cb_build_perform_forever (NULL);
 	} else {
-		if ($1 == CB_AFTER)
-			cb_build_perform_after_until();
 		varying = CB_LIST_INIT (cb_build_perform_varying (NULL, NULL, NULL, $3));
 		$$ = cb_build_perform_until ($1, varying);
 	}
@@ -10081,14 +9383,13 @@ read_statement:
   READ
   {
 	begin_statement ("READ", TERM_READ);
-	cobc_cs_check = CB_CS_READ;
   }
   read_body
   end_read
 ;
 
 read_body:
-  file_name _flag_next _record _read_into _lock_phrases _read_key read_handler
+  file_name _flag_next _record read_into lock_phrases read_key read_handler
   {
 	cobc_cs_check = 0;
 
@@ -10116,13 +9417,13 @@ read_body:
   }
 ;
 
-_read_into:
+read_into:
   /* empty */			{ $$ = NULL; }
 | INTO identifier		{ $$ = $2; }
 ;
 
-_lock_phrases:
-  /* empty */ %prec SHIFT_PREFER
+lock_phrases:
+  %prec SHIFT_PREFER /* empty */
   {
 	$$ = NULL;
   }
@@ -10194,7 +9495,7 @@ extended_with_lock:
   }
 ;
 
-_read_key:
+read_key:
   /* empty */			{ $$ = NULL; }
 | KEY _is identifier		{ $$ = $3; }
 ;
@@ -10322,7 +9623,7 @@ return_statement:
 ;
 
 return_body:
-  file_name _record _read_into return_at_end
+  file_name _record read_into return_at_end
   {
 	cb_emit_return ($1, $3);
   }
@@ -10542,7 +9843,6 @@ set_body:
 | set_to_on_off_sequence
 | set_to_true_false_sequence
 | set_last_exception_to_off
-| set_thread_priority
 ;
 
 on_or_off:
@@ -10628,10 +9928,6 @@ set_to:
   {
 	cb_emit_set_to ($1, $3);
   }
-| target_x_list TO SIZE OF x	// ACUCOBOL extension, cater for dialect setting later
-  {
-	cb_emit_move (cb_build_length ($5), $1);
-  }
 ;
 
 /* SET name ... UP/DOWN BY expr */
@@ -10684,17 +9980,6 @@ set_last_exception_to_off:
   }
 ;
 
-/* SET THREAD thread-handle PRIORITY TO priority */
-
-set_thread_priority:
-  thread_reference_optional PRIORITY TO pos_num_id_or_lit
-  {
-	cb_emit_set_thread_priority ($1, $4);
-	CB_PENDING ("THREAD");
-  }
-;
-
-
 /* SORT statement */
 
 sort_statement:
@@ -10706,7 +9991,7 @@ sort_statement:
 ;
 
 sort_body:
-  table_identifier sort_key_list _sort_duplicates sort_collating
+  sort_identifier sort_key_list _sort_duplicates sort_collating
   {
 	cb_tree		x;
 
@@ -10806,7 +10091,6 @@ sort_input:
 			cb_emit_sort_input ($4);
 		}
 	}
-	cobc_cs_check = 0;
   }
 ;
 
@@ -10836,7 +10120,6 @@ sort_output:
 			cb_emit_sort_output ($4);
 		}
 	}
-	cobc_cs_check = 0;
   }
 ;
 
@@ -10945,31 +10228,21 @@ stop_statement:
 	check_unreached = 1;
 	cobc_cs_check = 0;
   }
-| STOP stop_argument
+| STOP stop_literal
   {
 	begin_statement ("STOP", 0);
+	cb_verify (cb_stop_literal_statement, "STOP literal");
 	cb_emit_display (CB_LIST_INIT ($2), cb_int0, cb_int1, NULL,
 			 NULL, 1, DEVICE_DISPLAY);
 	cb_emit_accept (cb_null, NULL, NULL);
 	cobc_cs_check = 0;
-  }
-| STOP thread_reference_optional
-  {
-	begin_statement ("STOP THREAD", 0);
-	cb_emit_stop_thread ($2);
-	cobc_cs_check = 0;
-	cb_warning_x (COBC_WARN_FILLER, $2, _("%s is replaced by %s"), "STOP THREAD", "STOP RUN");
   }
 ;
 
 stop_returning:
   /* empty */
   {
-	if (current_program->cb_return_code) {
-		$$ = current_program->cb_return_code;
-	} else {
-		$$ = cb_int0;
-	}
+	$$ = current_program->cb_return_code;
   }
 | return_give x	/* common extension, should error with -std=cobolX */
   {
@@ -11005,17 +10278,6 @@ _status_x:
 | x
   {
 	$$ = $1;
-  }
-;
-
-stop_argument:
-  stop_literal
-  {
-	cb_verify (cb_stop_literal_statement, _("STOP literal"));
-  }
-| identifier
-  {
-	cb_verify (cb_stop_identifier_statement, _("STOP identifier"));
   }
 ;
 
@@ -11062,6 +10324,7 @@ string_item:
 		save_tree = cb_list_add (save_tree, $2);
 	}
   }
+
 ;
 
 _string_delimited:
@@ -11115,11 +10378,6 @@ subtract_body:
 | CORRESPONDING identifier FROM identifier flag_rounded on_size_error_phrases
   {
 	cb_emit_corresponding (cb_build_sub, $4, $2, $5);
-  }
-| TABLE table_identifier FROM table_identifier flag_rounded _from_idx_to_idx _dest_index on_size_error_phrases
-  {
-	CB_PENDING ("SUBTRACT TABLE");
-	cb_emit_tab_arithmetic (cb_build_sub, $4, $2, $5, $6, $7);
   }
 ;
 
@@ -11236,8 +10494,7 @@ unstring_statement:
 ;
 
 unstring_body:
-  /* Note: using an literal here is an extension */
-  id_or_lit_or_func _unstring_delimited unstring_into
+  identifier _unstring_delimited unstring_into
   _with_pointer _unstring_tallying _on_overflow_phrases
   {
 	cb_emit_unstring ($1, $2, $3, $4, $5);
@@ -11404,7 +10661,7 @@ use_debugging:
 	char		name[64];
 
 	cb_verify (cb_use_for_debugging, "USE FOR DEBUGGING");
-
+	
 	if (!in_declaratives) {
 		cb_error (_("USE statement must be within DECLARATIVES"));
 	} else if (current_program->nested_level) {
@@ -11469,7 +10726,7 @@ debugging_target:
 			case CB_TAG_FILE:
 				CB_FILE (l)->debug_section = current_section;
 				CB_FILE (l)->flag_fl_debug = 1;
-				break;
+				break; 
 			case CB_TAG_FIELD:
 				x = cb_ref ($1);
 				if (CB_INVALID_TREE (x)) {
@@ -11538,13 +10795,13 @@ program_start_end:
   START
   {
 	emit_statement (cb_build_comment ("USE AT PROGRAM START"));
-	/* emit_entry ("_START", 0, NULL, NULL); */
+	/* emit_entry ("_START", 0, NULL); */
 	CB_PENDING ("USE AT PROGRAM START");
   }
 | END
   {
 	emit_statement (cb_build_comment ("USE AT PROGRAM END"));
-	/* emit_entry ("_END", 0, NULL, NULL); */
+	/* emit_entry ("_END", 0, NULL); */
 	CB_PENDING ("USE AT PROGRAM END");
   }
 ;
@@ -11988,43 +11245,6 @@ not_invalid_key_sentence:
   }
 ;
 
-/* THREAD constructs */
-
-_thread_start:
-  /* empty */
-  {
-	$$ = NULL;
-  }
-| _in THREAD
-  {
-	$$ = cb_int1;
-	CB_PENDING ("THREAD");
-  }
-;
-
-_thread_handle:
-  /* empty */
-  {
-	$$ = NULL;
-  }
-| HANDLE _in identifier
-  {
-	$$ = $3;
-	CB_PENDING ("THREAD");
-  }
-;
-
-thread_reference_optional:
-  THREAD identifier
-  {
-	$$ = $2;
-  }
-| THREAD
-  {
-	$$ = NULL;
-  }
-;
-
 /* Common Constructs */
 
 _scroll_lines:
@@ -12045,7 +11265,6 @@ condition:
   expr
   {
 	$$ = cb_build_cond ($1);
-	cb_end_cond ($$);
   }
 ;
 
@@ -12069,16 +11288,13 @@ partial_expr:
 
 expr_tokens:
   expr_token
+| expr_tokens IS
 | expr_tokens expr_token
 ;
 
 expr_token:
   x				{ push_expr ('x', $1); }
-| _is condition_or_class
-  /* This case is separate because _is _not causes a shift/reduce error. */
-| IS not condition_or_class
-  /* This case is not in condition_or_class as x contains ZERO. */
-| IS _not ZERO			{ push_expr ('x', cb_zero); }
+| CLASS_NAME			{ push_expr ('C', $1); }
 /* Parentheses */
 | TOK_OPEN_PAREN		{ push_expr ('(', NULL); }
 | TOK_CLOSE_PAREN		{ push_expr (')', NULL); }
@@ -12088,22 +11304,6 @@ expr_token:
 | TOK_MUL			{ push_expr ('*', NULL); }
 | TOK_DIV			{ push_expr ('/', NULL); }
 | EXPONENTIATION		{ push_expr ('^', NULL); }
-/* Logical operators */
-| not
-| AND				{ push_expr ('&', NULL); }
-| OR				{ push_expr ('|', NULL); }
-;
-
-_not:
-  /* empty */
-| not
-;
-
-not:
-  NOT				{ push_expr ('!', NULL); }
-
-condition_or_class:
-  CLASS_NAME			{ push_expr ('C', $1); }
 /* Conditional operators */
 | eq				{ push_expr ('=', NULL); }
 | gt				{ push_expr ('>', NULL); }
@@ -12111,6 +11311,10 @@ condition_or_class:
 | ge				{ push_expr (']', NULL); }
 | le				{ push_expr ('[', NULL); }
 | NOT_EQUAL			{ push_expr ('~', NULL); }
+/* Logical operators */
+| NOT				{ push_expr ('!', NULL); }
+| AND				{ push_expr ('&', NULL); }
+| OR				{ push_expr ('|', NULL); }
 /* Class condition */
 | OMITTED			{ push_expr ('O', NULL); }
 | NUMERIC			{ push_expr ('9', NULL); }
@@ -12384,7 +11588,7 @@ cd_name:
 	}
   }
 ;
-
+  
 /* Report name */
 
 /* RXWRXW - Report list
@@ -12536,11 +11740,11 @@ undefined_word:
 		$$ = $1;
 	}
   }
-| error
+|  error
   {
-	yyclearin;
-	yyerrok;
-	$$ = cb_error_node;
+	  yyclearin;
+	  yyerrok;
+	  $$ = cb_error_node;
   }
 ;
 
@@ -12793,7 +11997,7 @@ sub_identifier:
   sub_identifier_1		{ $$ = cb_build_identifier ($1, 0); }
 ;
 
-table_identifier:
+sort_identifier:
   sub_identifier_1		{ $$ = cb_build_identifier ($1, 1); }
 ;
 
@@ -12884,17 +12088,6 @@ identifier_1:
 	if (start_debug) {
 		cb_check_field_debug ($1);
 	}
-  }
-;
-
-identifier_list:
-  identifier
-  {
-	$$ = CB_LIST_INIT ($1);
-  }
-| identifier_list identifier
-  {
-	$$ = cb_list_add ($1, $2);
   }
 ;
 
@@ -13242,7 +12435,7 @@ length_arg:
 	suppress_data_exceptions = 1;
   }
   expr_x
-  {
+  {		
 	suppress_data_exceptions = 0;
 	$$ = CB_LIST_INIT ($2);
   }
@@ -13391,7 +12584,7 @@ flag_rounded:
 	if ($2) {
 		$$ = $2;
 	} else {
-		$$ = default_rounded_mode;
+		$$ = cb_int (COB_STORE_ROUND);
 	}
 	cobc_cs_check = 0;
   }
@@ -13448,25 +12641,6 @@ round_choice:
 flag_separate:
   /* empty */			{ $$ = NULL; }
 | SEPARATE _character		{ $$ = cb_int1; }
-;
-
-_from_idx_to_idx:
-/* empty */			{ $$ = NULL; }
-| FROM _index pos_num_id_or_lit TO pos_num_id_or_lit
-  {
-	cb_tree	x;
-
-	x = CB_LIST_INIT ($2);
-	$$ = cb_list_add (x, $4);
-  }
-;
-
-_dest_index:
-/* empty */			{ $$ = NULL; }
-| DESTINATION _index pos_num_id_or_lit
-  {
-	$$ = $3;
-  }
 ;
 
 /* Error recovery */
@@ -13579,7 +12753,6 @@ _by:		| BY ;
 _character:	| CHARACTER ;
 _characters:	| CHARACTERS ;
 _contains:	| CONTAINS ;
-_controls:	| CONTROLS ;
 _data:		| DATA ;
 _end_of:	| END _of ;
 _file:		| TOK_FILE ;
@@ -13588,13 +12761,11 @@ _for:		| FOR ;
 _from:		| FROM ;
 _in:		| IN ;
 _in_order:	| ORDER | IN ORDER ;
-_index:		| INDEX ;
 _indicate:	| INDICATE ;
 _initial:	| TOK_INITIAL ;
 _into:		| INTO ;
 _is:		| IS ;
 _is_are:	| IS | ARE ;
-_is_in:		| IS | IN ;
 _key:		| KEY ;
 _left_or_right:	| LEFT | RIGHT ;
 _line:		| LINE ;
@@ -13642,7 +12813,7 @@ in_of:			IN | OF ;
 label_option:		STANDARD | OMITTED ;
 line_or_lines:		LINE | LINES ;
 lock_records:		RECORD | RECORDS ;
-object_char_or_word_or_modules:	CHARACTERS | WORDS | MODULES;
+object_char_or_word:	CHARACTERS | WORDS ;
 records:		RECORD _is | RECORDS _are ;
 reel_or_unit:		REEL | UNIT ;
 scroll_line_or_lines:	LINE | LINES ;

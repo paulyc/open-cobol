@@ -1,8 +1,8 @@
 #
 # Makefile gnucobol/config
 #
-# Copyright (C) 2003-2012, 2014-2015, 2017 Free Software Foundation, Inc.
-# Written by Keisuke Nishida, Roger While, Simon Sobisch
+# Copyright (C) 2003-2012, 2014-2015 Free Software Foundation, Inc.
+# Written by Keisuke Nishida, Roger While
 #
 # This file is part of GnuCOBOL.
 #
@@ -21,11 +21,7 @@
 
 configdir = @COB_CONFIG_DIR@
 config_DATA = default.conf cobol85.conf cobol2002.conf cobol2014.conf \
-	acu.conf mf.conf ibm.conf mvs.conf bs2000.conf rm.conf \
-	acu-strict.conf mf-strict.conf ibm-strict.conf mvs-strict.conf \
-	bs2000-strict.conf rm-strict.conf xopen.conf lax.conf-inc \
-	cobol85.words cobol2002.words cobol2014.words \
-	acu.words mf.words ibm.words mvs.words bs2000.words rm.words \
+	acu.conf mf.conf ibm.conf mvs.conf bs2000.conf \
 	runtime.cfg runtime_empty.cfg
 
 EXTRA_DIST = $(config_DATA)
