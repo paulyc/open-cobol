@@ -66,6 +66,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkIncremental="2"
+				AdditionalLibraryDirectories="$(SolutionDir)..\($PlatformName)"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="1"
@@ -132,7 +133,7 @@
 				RuntimeLibrary="2"
 				UsePrecompiledHeader="0"
 				WarningLevel="4"
-				DebugInformationFormat="3"
+				DebugInformationFormat="0"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -147,7 +148,8 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkIncremental="1"
-				GenerateDebugInformation="true"
+				AdditionalLibraryDirectories="$(SolutionDir)..\($PlatformName)"
+				GenerateDebugInformation="false"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -356,10 +358,6 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\..\libcob\cobgetopt.h"
-				>
-			</File>
-			<File
 				RelativePath="..\config.h"
 				>
 			</File>
@@ -373,6 +371,10 @@
 			</File>
 			<File
 				RelativePath="..\..\tarstamp.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\libcob\cobgetopt.h"
 				>
 			</File>
 		</Filter>

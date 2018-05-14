@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2001-2012, 2014-2018 Free Software Foundation, Inc.
+   Copyright (C) 2001-2012, 2014-2017 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart
 
    This file is part of GnuCOBOL.
@@ -28,7 +28,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
-#include <limits.h>
 #ifdef	HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -73,6 +72,13 @@
 extern void	_nc_freeall (void);
 #endif
 
+/**
+This struct will hold ACCEPT fields, it is processed at the end of an ACCEPT
+call and it is also be sorted by qsort as it needs to be in order by
+screen position and not the order fields were added to it because the user will 
+need to be able to use tab and arrow keys to switch between 
+fields based on position and not on order fields were added
+**/
 struct cob_inp_struct {
 	cob_screen		*scr;
 	size_t			up_index;
@@ -81,6 +87,9 @@ struct cob_inp_struct {
 	int			this_x;
 };
 
+/**
+memory is allocated for allocated for all the realistic fields a user might have
+**/
 #define	COB_INP_FLD_MAX		512U
 
 #define	COB_INP_SIZE	(COB_INP_FLD_MAX * sizeof(struct cob_inp_struct))
@@ -91,11 +100,18 @@ struct cob_inp_struct {
 
 /* Local variables */
 
+/**
+stores global settings in a struct
+**/
 static cob_global		*cobglobptr;
 static cob_settings		*cobsetptr;
 
-/* Local variables when screenio activated */
 
+/* much of this file is divided by compiler directives that
+separate code that uses ncurses from codes that operates without 
+ncurses support, there will be a very large directive below */
+
+/* Local variables when screenio activated */
 #ifdef	COB_GEN_SCREENIO
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
@@ -115,7 +131,22 @@ static int			accept_cursor_y;
 static int			accept_cursor_x;
 static int			pending_accept;
 static int			got_sys_char;
+
+/**
+active window
+**/
+WINDOW * actwin ;
+/**
+ stores X and Y of the whole screen
+**/
+MEVENT global_mevent ;
+/**
+X and Y of a child screen set as active window
+**/
+MEVENT local_mevent ;
+
 #endif
+
 
 /* Local function prototypes when screenio activated */
 
@@ -136,6 +167,7 @@ cob_speaker_beep (void)
 	}
 }
 
+
 static COB_INLINE COB_A_INLINE void
 init_cob_screen_if_needed (void)
 {
@@ -148,6 +180,11 @@ init_cob_screen_if_needed (void)
 	}
 #endif
 }
+
+/* this is the start of a large compiler directive, the first part will 
+be functions to support screen and enhanced display while the "else"
+portion much further down will contain stubs that match the names of
+these functions but do little to nothing */
 
 #ifdef	COB_GEN_SCREENIO
 
@@ -169,13 +206,146 @@ cob_beep (void)
 	}
 }
 
+/**
+this will normalize key presses, we might have ASCII or EBNIC
+**/
+static void
+cob_convert_key (int *keyp, const cob_u32_t field_accept)
+{
+	/* Map key to KEY_xxx value */
+	switch (*keyp) {
+	case '\n':
+	case '\r':
+	case '\004':
+	case '\032':
+		*keyp = KEY_ENTER;
+		break;
+	case '\t':
+		*keyp = KEY_STAB;
+		break;
+	case '\b':
+	case 0177:
+		*keyp = KEY_BACKSPACE;
+		break;
+	case 01005:
+		*keyp = KEY_EOL;	/* Alt-Delete */
+		break;
+	case 01040:
+		*keyp = KEY_CLOSE;	/* Alt-left-arrow */
+		break;
+	case 01062:
+		*keyp = KEY_PREVIOUS;	/* Alt-right-arrow */
+		break;
+
+#ifdef	KEY_A1
+	/* A1, A3, C1, C3 must be present */
+	case KEY_A1:
+		*keyp = KEY_HOME;
+		break;
+	case KEY_A3:
+		*keyp = KEY_PPAGE;
+		break;
+	case KEY_C1:
+		*keyp = KEY_END;
+		break;
+	case KEY_C3:
+		*keyp = KEY_NPAGE;
+		break;
+	/* Any or all of A2, B1-3, C2 MAY be present */
+	/* Note B2 ignored */
+#ifdef	KEY_A2
+	case KEY_A2:
+		*keyp = KEY_UP;
+		break;
+#endif
+#ifdef	KEY_B1
+	case KEY_B1:
+		*keyp = KEY_LEFT;
+		break;
+#endif
+#ifdef	KEY_B3
+	case KEY_B3:
+		*keyp = KEY_RIGHT;
+		break;
+#endif
+#ifdef	KEY_C2
+	case KEY_C2:
+		*keyp = KEY_DOWN;
+		break;
+#endif
+
+#if	defined(__PDCURSES__) && defined(PADSLASH)
+	case PADSLASH:
+		*keyp = '/';
+		break;
+	case PADSTAR:
+		*keyp = '*';
+		break;
+	case PADMINUS:
+		*keyp = '-';
+		break;
+	case PADPLUS:
+		*keyp = '+';
+		break;
+	case PADENTER:
+		*keyp = KEY_ENTER;
+		break;
+#ifdef	PAD0
+	case PAD0:
+		*keyp = KEY_IC;
+		break;
+	case PADSTOP:
+		*keyp = KEY_DC;
+		break;
+#endif	/* PAD0 */
+#endif	/* __PDCURSES__ */
+#endif	/* KEY_A1 */
+	default:
+		break;
+	}
+
+	/* Check if key should be ignored */
+	switch (*keyp) {
+	/* 2012/08/30 removed to allow Tab key in extended Accept.
+	case KEY_STAB:
+		if (field_accept) {
+			*keyp = 0;
+		}
+		break;
+	*/
+	case '\033':
+		if (!COB_EXTENDED_STATUS || !COB_USE_ESC) {
+			*keyp = 0;
+		}
+		break;
+	case KEY_PPAGE:
+	case KEY_NPAGE:
+	case KEY_PRINT:
+		if (!COB_EXTENDED_STATUS) {
+			*keyp = 0;
+		}
+		break;
+	case KEY_UP:
+	case KEY_DOWN:
+		if (field_accept && !COB_EXTENDED_STATUS) {
+			*keyp = 0;
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+/**
+boundary checks with moves
+**/
 static void
 raise_ec_on_invalid_line_or_col (const int line, const int column)
 {
 	int	max_y;
 	int	max_x;
 
-	getmaxyx (stdscr, max_y, max_x);
+	getmaxyx (actwin, max_y, max_x);
 	if (line < 0 || line >= max_y) {
 		cob_set_exception (COB_EC_SCREEN_LINE_NUMBER);
 	}
@@ -183,11 +353,13 @@ raise_ec_on_invalid_line_or_col (const int line, const int column)
 		cob_set_exception (COB_EC_SCREEN_STARTING_COLUMN);
 	}
 }
-
+/**
+wraps ncurses move() adds boundary checks
+**/
 static int
 cob_move_cursor (const int line, const int column)
 {
-	int status = move (line, column);
+	int status = wmove (actwin, line, column);
 
 	if (status == ERR) {
 		raise_ec_on_invalid_line_or_col (line, column);
@@ -201,7 +373,9 @@ cob_set_cursor_pos (int line, int column)
 	init_cob_screen_if_needed ();
 	(void) move (line, column);
 }
-
+/**
+checks screen width, moves to end of it
+**/
 static void
 cob_move_to_beg_of_last_line (void)
 {
@@ -210,16 +384,23 @@ cob_move_to_beg_of_last_line (void)
 
 	COB_UNUSED (max_x);
 
-	getmaxyx (stdscr, max_y, max_x);
+	getmaxyx (actwin, max_y, max_x);
 	/* We don't need to check for exceptions here; it will always be fine */
-	move (max_y, 0);
+	wmove (actwin, max_y, 0);
 }
 
+/**
+These are basically of IDs that changes the way a screen is processed,
+**/
 enum screen_statement {
 	ACCEPT_STATEMENT,
 	DISPLAY_STATEMENT
 };
 
+/**
+parse styles and apply with attron, set background colour,
+blank screen if need or clear lines etc
+**/
 static void
 cob_screen_attr (cob_field *fgc, cob_field *bgc, const cob_flags_t attr,
 		 const enum screen_statement stmt)
@@ -233,7 +414,7 @@ cob_screen_attr (cob_field *fgc, cob_field *bgc, const cob_flags_t attr,
 	short		fgdef;
 	short		bgdef;
 
-	attrset (A_NORMAL);
+	wattrset (actwin, A_NORMAL);
 	if (attr & COB_SCREEN_REVERSE) {
 		styles |= A_REVERSE;
 	}
@@ -329,42 +510,48 @@ cob_screen_attr (cob_field *fgc, cob_field *bgc, const cob_flags_t attr,
 #ifdef	HAVE_COLOR_SET
 			color_set ((short)COLOR_PAIR(i), NULL);
 #else
-			attrset (COLOR_PAIR(i));
+			wattrset (actwin, COLOR_PAIR(i));
 #endif
-			bkgdset (COLOR_PAIR(i));
+			wbkgdset (actwin, COLOR_PAIR(i));
 		} else {
 			if (!styles) {
-				attrset (A_NORMAL);
+				wattrset (actwin, A_NORMAL);
 			}
 		}
 	}
 	/* BLANK SCREEN colors the whole screen. */
 	if (attr & COB_SCREEN_BLANK_SCREEN) {
-		getyx (stdscr, line, column);
-		clear ();
+		getyx (actwin, line, column);
+		wclear (actwin);
 		cob_move_cursor (line, column);
 	}
 
 	if (stmt == DISPLAY_STATEMENT) {
 		/* BLANK LINE colors the whole line. */
 		if (attr & COB_SCREEN_BLANK_LINE) {
-			getyx (stdscr, line, column);
+			getyx (actwin, line, column);
 			cob_move_cursor (line, 0);
-			clrtoeol ();
+			wclrtoeol (actwin);
 			cob_move_cursor (line, column);
 		}
 		if (attr & COB_SCREEN_ERASE_EOL) {
-			clrtoeol ();
+			wclrtoeol (actwin);
 		}
 		if (attr & COB_SCREEN_ERASE_EOS) {
-			clrtobot ();
+			wclrtobot (actwin);
 		}
 	}
 	if (attr & COB_SCREEN_BELL) {
 		cob_beep ();
 	}
 }
-
+/**read some env variables
+flush stdout and stderr
+set globals values such as global_return, to default values.
+setup ncurses including mouse support if available.
+set attributes to normal.
+get screen size.
+**/
 static void
 cob_screen_init (void)
 {
@@ -420,7 +607,6 @@ cob_screen_init (void)
 
 	if (!initscr ()) {
 		cob_runtime_error (_("failed to initialize curses"));
-		/* FIXME: likely should raise an exception instead */
 		cob_stop_run (1);
 	}
 	cobglobptr->cob_screen_initialized = 1;
@@ -437,8 +623,13 @@ cob_screen_init (void)
 #endif
 #endif
 
+        actwin = stdscr ;
 	cbreak ();
 	keypad (stdscr, 1);
+
+         // expand to our click configurations later
+        mousemask(BUTTON1_RELEASED,  NULL) ; 
+
 	nonl ();
 	noecho ();
 	if (has_colors ()) {
@@ -455,208 +646,28 @@ cob_screen_init (void)
 			cob_has_color = 1;
 		}
 	}
-	attrset (A_NORMAL);
-	getmaxyx (stdscr, COB_MAX_Y_COORD, COB_MAX_X_COORD);
-
-	/* Depending on insert mode set vertical bar cursor (on)
-	   or square cursor (off) - note: the cursor change may has no
-	   effect in all curses implementations / terminals */
-	if (cobsetptr->cob_insert_mode == 0) {
-		(void)curs_set(2);	/* set square cursor */
-	} else {
-		(void)curs_set(1);	/* set vertical bar cursor */
-	}
-
-	/* Possible alternative definitions for ALT Keys */
-#ifndef ALT_DEL
-#	ifdef kDC3
-#		define ALT_DEL   kDC3
-#	endif
-#endif
-#ifndef ALT_LEFT
-#	ifdef kLFT3
-#		define ALT_LEFT   kLFT3
-#	endif
-#endif
-#ifndef ALT_RIGHT
-#	ifdef kRIT3
-#		define ALT_RIGHT   kRIT3
-#	endif
-#endif
-
-	/* When still missing - self define the keys */
-	/* note: if define_key is not available rhe user will have to manually
-	   assign terminfo values for the control strings to the given
-	   KEY_MAX + n / __KEY_MIN - n values */
-
-#ifndef HAVE_DEFINE_KEY
-#define define_key(x,y)	/* do nothing */
-#endif
-
-#if defined (KEY_MAX) && KEY_MAX > 0
-#define COB_NEW_KEY(n)		(KEY_MAX + n)
-#elif defined (__KEY_MIN) && __KEY_MIN < 0
-#define COB_NEW_KEY(n)		(__KEY_MIN - n)
-#else
-#ifdef HAVE_DEFINE_KEY
-#error "Did not find a valid value for key definition. Please report this!"
-#endif
-#endif
-
-#ifdef COB_NEW_KEY
-#ifndef ALT_DEL
-#define ALT_DEL                 COB_NEW_KEY(1)
-	define_key("\E[3;3~", ALT_DEL);
-#endif
-#ifndef ALT_LEFT
-#define ALT_LEFT                COB_NEW_KEY(2)
-	define_key("\E[1;3D", ALT_LEFT);
-#endif
-#ifndef ALT_RIGHT
-#define ALT_RIGHT               COB_NEW_KEY(3)
-	define_key("\E[1;3C", ALT_RIGHT);
-#endif
-#else
-#ifndef ALT_DEL
-#define ALT_DEL                 KEY_SDC
-#endif
-#ifndef ALT_LEFT
-#define ALT_LEFT                KEY_SLEFT
-#endif
-#ifndef ALT_RIGHT
-#define ALT_RIGHT               KEY_ALEFT
-#endif
-#endif
-
+	wattrset (actwin, A_NORMAL);
+	getmaxyx (actwin, COB_MAX_Y_COORD, COB_MAX_X_COORD);
 }
+/**
+we might need to update crt status
+we might need to update cob-cursor in the special names.
+cob-cursor could be pic 9(2) or 9(3), we need to be prepared for either.
+if mouse support is enabled, the mouse X and Y will be copied to CURSOR 
 
-static void
-cob_convert_key (int *keyp, const cob_u32_t field_accept)
-{
-	/* Map key to KEY_xxx value */
-	switch (*keyp) {
-	case '\n':
-	case '\r':
-	case '\004':
-	case '\032':
-		*keyp = KEY_ENTER;
-		break;
-	case '\t':
-		*keyp = KEY_STAB;
-		break;
-	case '\b':
-	case 0177:
-		*keyp = KEY_BACKSPACE;
-		break;
-	case KEY_EOL:
-		*keyp = ALT_DEL;
-		break;
-	case KEY_CLOSE:
-		*keyp = ALT_LEFT;
-		break;
-	case KEY_PREVIOUS:
-		*keyp = ALT_LEFT;
-		break;
+ 
+here are the status codes
+         set screen accept crt status codes
+         1000           = Enter key pressed
+         1001-1064      = F1–F64    pressed
+         2001,2002      = PgUp,PgDn
+         2003,2004,2006 = Up-Arrow, Down-Arrow, PrtScr
+         2005           = ESC
+         3000           = Mouse Single Left Click 
+         8000           = no data is available on screen accept
+         9000           = fatal screen i/o error
 
-#ifdef	KEY_A1
-	/* A1, A3, C1, C3 are always present if A1 is defined */
-	case KEY_A1:
-		*keyp = KEY_HOME;
-		break;
-	case KEY_A3:
-		*keyp = KEY_PPAGE;
-		break;
-	case KEY_C1:
-		*keyp = KEY_END;
-		break;
-	case KEY_C3:
-		*keyp = KEY_NPAGE;
-		break;
-	/* Any or all of A2, B1-3, C2 MAY be present */
-	/* Note: B2 ignored */
-#ifdef	KEY_A2
-	case KEY_A2:
-		*keyp = KEY_UP;
-		break;
-#endif
-#ifdef	KEY_B1
-	case KEY_B1:
-		*keyp = KEY_LEFT;
-		break;
-#endif
-#ifdef	KEY_B3
-	case KEY_B3:
-		*keyp = KEY_RIGHT;
-		break;
-#endif
-#ifdef	KEY_C2
-	case KEY_C2:
-		*keyp = KEY_DOWN;
-		break;
-#endif
-
-#if	defined(__PDCURSES__) && defined(PADSLASH)
-	case PADSLASH:
-		*keyp = '/';
-		break;
-	case PADSTAR:
-		*keyp = '*';
-		break;
-	case PADMINUS:
-		*keyp = '-';
-		break;
-	case PADPLUS:
-		*keyp = '+';
-		break;
-	case PADENTER:
-		*keyp = KEY_ENTER;
-		break;
-#ifdef	PAD0
-	case PAD0:
-		*keyp = KEY_IC;
-		break;
-	case PADSTOP:
-		*keyp = KEY_DC;
-		break;
-#endif	/* PAD0 */
-#endif	/* __PDCURSES__ */
-#endif	/* KEY_A1 */
-	default:
-		break;
-	}
-
-	/* Check if key should be ignored */
-	switch (*keyp) {
-#if 0 /* 2012/08/30 removed to allow Tab key in extended Accept */
-	case KEY_STAB:
-		if (field_accept) {
-			*keyp = 0;
-		}
-		break;
-#endif
-	case '\033':
-		if (!COB_EXTENDED_STATUS || !COB_USE_ESC) {
-			*keyp = 0;
-		}
-		break;
-	case KEY_PPAGE:
-	case KEY_NPAGE:
-	case KEY_PRINT:
-		if (!COB_EXTENDED_STATUS) {
-			*keyp = 0;
-		}
-		break;
-	case KEY_UP:
-	case KEY_DOWN:
-		if (field_accept && !COB_EXTENDED_STATUS) {
-			*keyp = 0;
-		}
-		break;
-	default:
-		break;
-	}
-}
-
+**/
 static void
 cob_check_pos_status (const int fret)
 {
@@ -666,6 +677,8 @@ cob_check_pos_status (const int fret)
 	char		buff[23]; /* 10: make the compiler happy as "int" *could*
 						         have more digits than we "assume" */
 
+        int child_win_y, child_win_x ;
+
 	if (fret) {
 		cob_set_exception (COB_EC_IMP_ACCEPT);
 	}
@@ -673,17 +686,72 @@ cob_check_pos_status (const int fret)
 	if (!COB_MODULE_PTR) {
 		return;
 	}
+
+        /*
+         this will copy values to update CRT-STATUS available in SPECIAL-NAMES
+       */
+
+
 	if (COB_MODULE_PTR->crt_status) {
 		if (COB_FIELD_IS_NUMERIC (COB_MODULE_PTR->crt_status)) {
 			cob_set_int (COB_MODULE_PTR->crt_status, fret);
 		} else {
 			sprintf(buff, "%4.4d", fret);
-			memcpy (COB_MODULE_PTR->crt_status->data, buff,
+			memcpy (*COB_MODULE_PTR->crt_status->data, buff,
 				(size_t)4);
 		}
+
+        /*
+         this will update CURSOR in SPECIAL-NAMES. The user could have defined :
+
+        01 COB-CURSOR  .
+           05 CURSOR-ROW PIC  9(2) .
+           05 CURSOR-COL PIC  9(2) .
+ 
+        or
+ 
+        01 COB-CURSOR  .
+           05 CURSOR-ROW PIC  9(3) .
+           05 CURSOR-COL PIC  9(3) .
+
+        with the addition of multiple windows, we need a way to handle
+        clicks that occur outside of the window if the active window is a smaller window that does not cover the whole
+        screen ncurses will only return Y and X from the whole terminal.
+        */
+
+
+	if (COB_MODULE_PTR->cursor_pos) {  
+
+           if (fret == 3000 ){
+
+             if ( wenclose(actwin, global_mevent.y, global_mevent.x) ) {
+                 getbegyx(actwin, child_win_y, child_win_x) ;
+                 local_mevent.y = global_mevent.y - child_win_y ;
+                 local_mevent.x = global_mevent.x - child_win_x ;
+                 sline   = local_mevent.y ;
+                 scolumn = local_mevent.x ;
+             } else {
+               /* if the local screen in not clicked on, we want to return zeros */
+               /* by placing them at -1, they will be zero after the increment below */
+  	       getyx (actwin, sline, scolumn);
+               sline = sline - 1 ;
+               scolumn = scolumn - 1 ;
+             }
+
+ 
+          } else {
+  	 	getyx (actwin, sline, scolumn);
+          }
+
+          /* COBOL starts at 1 */
+          sline ++;
+          scolumn ++ ;
 	}
+
+
+
+       /* the actual cursor values are assigned here */
 	if (COB_MODULE_PTR->cursor_pos) {
-		getyx (stdscr, sline, scolumn);
 		f = COB_MODULE_PTR->cursor_pos;
 		if (COB_FIELD_IS_NUMERIC (f) &&
 		    COB_FIELD_TYPE (f) != COB_TYPE_NUMERIC_DISPLAY) {
@@ -703,9 +771,14 @@ cob_check_pos_status (const int fret)
 				memcpy (f->data, buff, (size_t)6);
 			}
 		}
-	}
+         }
+    }
 }
 
+
+/**
+boundary checks for strings
+**/
 static void
 raise_ec_on_truncation (const int item_size)
 {
@@ -717,33 +790,38 @@ raise_ec_on_truncation (const int item_size)
 	COB_UNUSED (y);
 	COB_UNUSED (max_y);
 
-	getyx (stdscr, y, x);
-	getmaxyx (stdscr, max_y, max_x);
+	getyx (actwin, y, x);
+	getmaxyx (actwin, max_y, max_x);
 
 	if (x + item_size - 1 > max_x) {
 		cob_set_exception (COB_EC_SCREEN_ITEM_TRUNCATED);
 	}
 }
-
+/**
+wraps addstr adding boundary checks
+**/
 static void
 cob_addnstr (const char *data, const int size)
 {
 	raise_ec_on_truncation (size);
-	addnstr (data, size);
+	waddnstr (actwin, data, size);
 }
 
+/**
+wraps addch adding boundary checks
+**/
 static void
 cob_addch (const chtype c)
 {
 	raise_ec_on_truncation (1);
-	addch (c);
+	waddch (actwin, c);
 }
 
 /* Use only when raise_ec_on_truncation is called beforehand. */
 static void
 cob_addch_no_trunc_check (const chtype c)
 {
-	addch (c);
+	waddch (actwin, c);
 }
 
 static void
@@ -757,6 +835,9 @@ cob_addnch (const int n, const chtype c)
 	}
 }
 
+/**
+used with user navigation between fields
+**/
 static int
 is_first_screen_item (cob_screen *s)
 {
@@ -770,6 +851,9 @@ is_first_screen_item (cob_screen *s)
 	return 1;
 }
 
+/**
+used with user navigation between fields
+**/
 static cob_screen *
 get_last_child (cob_screen * const s)
 {
@@ -784,6 +868,9 @@ get_last_child (cob_screen * const s)
 	}
 }
 
+/**
+used with user navigation between fields
+**/
 static cob_screen *
 get_prev_screen_item (cob_screen * const s)
 {
@@ -831,6 +918,10 @@ get_size (cob_screen *s)
 	}
 
 }
+/**
+extract the line and column values from a screen field or if they are not defined,
+base them on the current position
+**/
 static void
 get_screen_item_line_and_col (cob_screen * s, int * const line,
 			      int * const col)
@@ -882,7 +973,11 @@ get_screen_item_line_and_col (cob_screen * s, int * const line,
 	*line += origin_y;
 	*col += origin_x;
 }
-
+/**
+move to current position and update globals that track X and Y.
+set screen attributes.If screen is ACCEPT and if screen is secure, add * chars instead of data, add 
+prompt character if no data fills that spot etc. If screen is DISPLAY, add string 
+**/
 static void
 cob_screen_puts (cob_screen *s, cob_field *f, const cob_u32_t is_input,
 		 const enum screen_statement stmt)
@@ -891,7 +986,7 @@ cob_screen_puts (cob_screen *s, cob_field *f, const cob_u32_t is_input,
 	size_t		size;
 	int		line;
 	int		column;
-	chtype		default_prompt_char;
+	chtype		promptchar;
 
 	get_screen_item_line_and_col (s, &line, &column);
 
@@ -905,9 +1000,9 @@ cob_screen_puts (cob_screen *s, cob_field *f, const cob_u32_t is_input,
 	if (s->attr & COB_SCREEN_INPUT) {
 		cob_screen_attr (s->foreg, s->backg, s->attr, stmt);
 		if (s->prompt) {
-			default_prompt_char = s->prompt->data[0];
+			promptchar = s->prompt->data[0];
 		} else {
-			default_prompt_char = COB_CH_UL;
+			promptchar = COB_CH_UL;
 		}
 		p = f->data;
 		raise_ec_on_truncation (f->size);
@@ -915,7 +1010,7 @@ cob_screen_puts (cob_screen *s, cob_field *f, const cob_u32_t is_input,
 			if (s->attr & COB_SCREEN_SECURE) {
 				cob_addch_no_trunc_check (COB_CH_AS);
 			} else if (*p <= ' ') {
-				cob_addch_no_trunc_check (default_prompt_char);
+				cob_addch_no_trunc_check (promptchar);
 			} else {
 				cob_addch_no_trunc_check ((const chtype)*p);
 			}
@@ -936,9 +1031,9 @@ cob_screen_puts (cob_screen *s, cob_field *f, const cob_u32_t is_input,
 		accept_cursor_x = column + f->size;
 	}
 
-	refresh ();
+	wrefresh (actwin);
 }
-
+/** constraint/type check **/
 static COB_INLINE COB_A_INLINE int
 cob_field_is_numeric_or_numeric_edited (cob_field *field)
 {
@@ -946,6 +1041,7 @@ cob_field_is_numeric_or_numeric_edited (cob_field *field)
 		|| COB_FIELD_TYPE (field) == COB_TYPE_NUMERIC_EDITED);
 }
 
+/** constraint/type check **/
 static int
 field_is_empty (cob_screen *s)
 {
@@ -962,6 +1058,7 @@ field_is_empty (cob_screen *s)
 	return 1;
 }
 
+/** constraint/type check **/
 static int
 field_is_zero (cob_screen *s)
 {
@@ -980,6 +1077,7 @@ field_is_zero (cob_screen *s)
 	return 1;
 }
 
+/** constraint/type check **/
 static int
 pic_has_zero_suppression (const cob_pic_symbol *pic)
 {
@@ -998,6 +1096,7 @@ pic_has_zero_suppression (const cob_pic_symbol *pic)
 	return 0;
 }
 
+/** constraint/type check **/
 static int
 get_num_int_digits_for_no_zero_sup (const cob_pic_symbol *pic)
 {
@@ -1022,6 +1121,7 @@ get_num_int_digits_for_no_zero_sup (const cob_pic_symbol *pic)
 	return num_digits;
 }
 
+/** constraint/type check **/
 static int
 field_is_zero_or_no_zero_suppression (cob_screen *s)
 {
@@ -1055,6 +1155,7 @@ field_is_zero_or_no_zero_suppression (cob_screen *s)
 	return num_digits_seen >= num_integer_digits;
 }
 
+/** constraint/type check **/
 /* Assuming s->field is alphanumeric */
 static int
 field_is_full (cob_screen *s)
@@ -1066,6 +1167,7 @@ field_is_full (cob_screen *s)
 	return !isspace (*data) && !isspace (*(data + size - 1));
 }
 
+/** constraint/type check **/
 static int
 satisfied_full_clause (cob_screen *s)
 {
@@ -1082,6 +1184,7 @@ satisfied_full_clause (cob_screen *s)
 	}
 }
 
+/** constraint/type check **/
 static int
 satisfied_required_clause (cob_screen *s)
 {
@@ -1096,38 +1199,34 @@ satisfied_required_clause (cob_screen *s)
 	}
 }
 
+/** constraint/type check **/
 static int
 valid_field_data (cob_field *field)
 {
-	int num_check;
-
 	if (COB_FIELD_IS_NUMERIC (field)) {
 		return cob_check_numval (field, NULL, 0, 0) == 0;
 	} else if (field->attr->type == COB_TYPE_NUMERIC_EDITED) {
-		num_check = cob_check_numval (field, NULL, 1, 0);
-		/* test for all spaces which is valid in this case
-		   and change to a one zero instead */
-		if (num_check == field->size + 1) {
-			field->data[0] = '0';
-			return 1;
-		}
 		return cob_check_numval (field, NULL, 1, 0) == 0;
 	} else {
 		return 1;
 	}
 }
-
+/** redraw screen **/
 static void
 refresh_field (cob_screen *s)
 {
 	int		y;
 	int		x;
 
-	getyx (stdscr, y, x);
+	getyx (actwin, y, x);
 	cob_screen_puts (s, s->field, cobsetptr->cob_legacy, ACCEPT_STATEMENT);
 	cob_move_cursor (y, x);
 }
-
+/**
+We copy the data into another field and move it back to format the
+numeric data neatly, rather than re-implement that logic here. We
+assume the data is valid. This function contains the actual commit of data.
+**/
 static void
 format_field (cob_screen *s)
 {
@@ -1135,11 +1234,6 @@ format_field (cob_screen *s)
 	size_t		size = s->field->size;
 	unsigned char	*data;
 
-	/*
-	  We copy the data into another field and move it back to format the
-	  numeric data neatly, rather than re-implement that logic here. We
-	  assume the data is valid.
-	*/
 	data = cob_malloc (size);
 	memcpy (data, s->field->data, size);
 	COB_FIELD_INIT (size, data, s->field->attr);
@@ -1155,7 +1249,9 @@ format_field (cob_screen *s)
 	refresh_field (s);
 }
 
-/* Finalize field on leaving it: checks and conversions */
+/**
+Finalize field on leaving it: checks and conversions
+**/
 static int
 finalize_field_input (cob_screen *s)
 {
@@ -1173,7 +1269,9 @@ finalize_field_input (cob_screen *s)
 
 	return 0;
 }
-
+/**
+call finalize on all fields
+**/
 static int
 finalize_all_fields (struct cob_inp_struct *sptr, const size_t total_idx)
 {
@@ -1187,27 +1285,31 @@ finalize_all_fields (struct cob_inp_struct *sptr, const size_t total_idx)
 
 	return 0;
 }
-
+/**
+process attributes. accept keypress and based on this possibly assign
+different values to screen_return while also potentially converting
+keys. Certain keys will also cause different screen struts to be
+acted on instead, for instance, a tab key will cause the next screen to 
+be processed instead.
+**/
 static void
-cob_screen_get_all (const int initial_curs, const int get_timeout)
+cob_screen_get_all (const int initial_curs, const int gettimeout)
 {
 	size_t			curr_index = (size_t)initial_curs;
 	struct cob_inp_struct	*sptr = cob_base_inp + curr_index;
 	cob_screen		*s = sptr->scr;
 	unsigned char		*p = s->field->data;
-	unsigned char		*p2;
-	unsigned char		move_char;
 	int			keyp;
 	int			sline = sptr->this_y;
 	int			scolumn = sptr->this_x;
 	int			cline;
 	int			ccolumn;
-	int			right_pos = scolumn + (int)s->field->size - 1;
-	int			at_eof = 0;
+	int			rightpos = scolumn + (int)s->field->size - 1;
+	int			ateof = 0;
+	int			gotbacksp = 0;
 	int			ungetched = 0;
 	int			status;
-	int			count;
-	chtype			default_prompt_char;
+	chtype			promptchar;
 
 	status = cob_move_cursor (sline, scolumn);
 	if (status != ERR) {
@@ -1217,18 +1319,15 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 
 	for (; ;) {
 		if (s->prompt) {
-			default_prompt_char = s->prompt->data[0];
+			promptchar = s->prompt->data[0];
 		} else {
-			default_prompt_char = COB_CH_UL;
+			promptchar = COB_CH_UL;
 		}
 
-		refresh ();
+		wrefresh (actwin);
 		errno = 0;
-		timeout (get_timeout);
-		keyp = getch ();
-
-		/* FIXME: modularize (cob_screen_get_all, field_accept) and
-		          use identical handling of keys wherever possible */
+		timeout (gettimeout);
+		keyp = wgetch (actwin);
 
 		if (keyp == ERR) {
 			global_return = 8001;
@@ -1246,9 +1345,20 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			continue;
 		}
 
-		getyx (stdscr, cline, ccolumn);
+		getyx (actwin, cline, ccolumn);
 
 		switch (keyp) {
+
+		case KEY_MOUSE:
+ 			cob_beep ();
+                        getmouse(&global_mevent);
+
+			if (finalize_all_fields (cob_base_inp, totl_index)) {
+				continue;
+			}
+			global_return = 3000;
+			goto screen_return;
+
 		case KEY_ENTER:
 			if (finalize_all_fields (cob_base_inp, totl_index)) {
 				cob_beep ();
@@ -1279,8 +1389,9 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			p = s->field->data;
 			cob_move_cursor (sline, scolumn);
 			cob_screen_attr (s->foreg, s->backg, s->attr,
@@ -1298,12 +1409,13 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			if (ungetched) {
 				ungetched = 0;
-				p = s->field->data + right_pos;
-				cob_move_cursor (sline, right_pos);
+				p = s->field->data + rightpos;
+				cob_move_cursor (sline, rightpos);
 			} else {
 				p = s->field->data;
 				cob_move_cursor (sline, scolumn);
@@ -1319,8 +1431,9 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			p = s->field->data;
 			cob_move_cursor (sline, scolumn);
 			cob_screen_attr (s->foreg, s->backg, s->attr,
@@ -1334,8 +1447,9 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			p = s->field->data;
 			cob_move_cursor (sline, scolumn);
 			cob_screen_attr (s->foreg, s->backg, s->attr,
@@ -1349,8 +1463,9 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			p = s->field->data;
 			cob_move_cursor (sline, scolumn);
 			cob_screen_attr (s->foreg, s->backg, s->attr,
@@ -1364,64 +1479,40 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			s = sptr->scr;
 			sline = sptr->this_y;
 			scolumn = sptr->this_x;
-			at_eof = 0;
-			right_pos = scolumn + (int)s->field->size - 1;
+			ateof = 0;
+			gotbacksp = 0;
+			rightpos = scolumn + (int)s->field->size - 1;
 			p = s->field->data;
 			cob_move_cursor (sline, scolumn);
 			cob_screen_attr (s->foreg, s->backg, s->attr,
 					 ACCEPT_STATEMENT);
 			continue;
 		case KEY_BACKSPACE:
-			/* Backspace key. */
-			if ((int) ccolumn > scolumn) {
-				at_eof = 0;
-				/* Shift remainder left with cursor. */
-				for (count = ccolumn; count < right_pos + 1; count++) {
-					/* Get character. */
-					p2 = s->field->data + count - scolumn ;
-					move_char = *p2;
-					/* Move the character left. */
-					p2 = s->field->data + count - scolumn - 1;
-					*p2 = move_char;
-					/* Update screen with moved character. */
-					cob_move_cursor (cline, count - 1);
-					if (s->attr & COB_SCREEN_NO_ECHO) {
-						cob_addch (COB_CH_SP);
-					} else if (s->attr & COB_SCREEN_SECURE) {
-						cob_addch (COB_CH_AS);
-					} else if (move_char == ' ') {
-						cob_addch (default_prompt_char);
-					} else {
-						cob_addch (move_char);
-					}
-				}
-				/* Put space as the right most character. */
-				p2 = s->field->data + s->field->size - 1;
-				if (COB_FIELD_IS_NUMERIC (s->field)) {
-					*p2 = '0';
+			if (ccolumn > scolumn) {
+				if (gotbacksp || ccolumn != rightpos) {
+					ccolumn--;
 				} else {
-					*p2 = ' ';
+					ateof = 0;
 				}
-				/* Add space to screen. */
-				cob_move_cursor (cline, count - 1);
-				if (s->attr & COB_SCREEN_NO_ECHO) {
-					cob_addch (COB_CH_SP);
-				} else if (s->attr & COB_SCREEN_SECURE) {
-					cob_addch (COB_CH_AS);
-				} else if (*p2 == ' ') {
-					cob_addch (default_prompt_char);
-				} else {
-					cob_addch (*p2);
-				}
-				/* Move cursor left one from current. */
-				ccolumn--;
+				gotbacksp = 1;
 				cob_move_cursor (cline, ccolumn);
-				p--;
+				if (s->attr & COB_SCREEN_SECURE) {
+					cob_addch (COB_CH_AS);
+				} else {
+					cob_addch (promptchar);
+				}
+				cob_move_cursor (cline, ccolumn);
+				p = s->field->data + ccolumn - scolumn;
+				*p = ' ';
 			} else {
-				cob_beep ();
+				ungetched = 1;
+				gotbacksp = 0;
+				ungetch (KEY_BACKSPACE);
+				ungetch (KEY_BTAB);
 			}
 			continue;
 		case KEY_LEFT:
+			gotbacksp = 0;
 			if (ccolumn > scolumn) {
 				ccolumn--;
 				cob_move_cursor (cline, ccolumn);
@@ -1432,7 +1523,8 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			}
 			continue;
 		case KEY_RIGHT:
-			if (ccolumn < right_pos) {
+			gotbacksp = 0;
+			if (ccolumn < rightpos) {
 				ccolumn++;
 				cob_move_cursor (cline, ccolumn);
 				p = s->field->data + ccolumn - scolumn;
@@ -1440,86 +1532,18 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 				ungetch ('\t');
 			}
 			continue;
-		case KEY_IC:
-			/* Insert key toggle */
-			/* If off turn on, if on turn off;
-			additional: switch between vertical bar cursor (on) and
-			square cursor (off) - note: the cursor change may has no
-			effect in all curses implementations / terminals */
-			if (cobsetptr->cob_insert_mode == 0) {
-				cobsetptr->cob_insert_mode = 1;     /* on */
-				(void)curs_set(1);	/* switch to vertical bar cursor */
-			} else {
-				cobsetptr->cob_insert_mode = 0;     /* off */
-				(void)curs_set(2);	/* switch to square cursor */
-			}
-			continue;
-		case KEY_DC:
-			/* Delete key. */
-			/* Delete character, move remainder left. */
-			for (count = ccolumn; count < right_pos; count++) {
-				/* Get character one position to right. */
-				p2 = s->field->data + count - scolumn + 1;
-				move_char = *p2;
-				/* Move the character left. */
-				p2 = s->field->data + count - scolumn;
-				*p2 = move_char;
-				/* Update screen with moved character. */
-				cob_move_cursor (cline, count);
-				if (s->attr & COB_SCREEN_NO_ECHO) {
-					cob_addch (COB_CH_SP);
-				} else if (s->attr & COB_SCREEN_SECURE) {
-					cob_addch (COB_CH_AS);
-				} else if (move_char == ' ') {
-					cob_addch (default_prompt_char);
-				} else {
-					cob_addch (move_char);
-				}
-			}
-			/* Put space as the right most character. */
-			p2 = s->field->data + s->field->size - 1;
-			if (COB_FIELD_IS_NUMERIC (s->field)) {
-				*p2 = '0';
-			} else {
-				*p2 = ' ';
-			}
-			/* Add space to screen. */
-			cob_move_cursor (cline, count);
-			if (s->attr & COB_SCREEN_NO_ECHO) {
-				cob_addch (COB_CH_SP);
-			} else if (s->attr & COB_SCREEN_SECURE) {
-				cob_addch (COB_CH_AS);
-			} else {
-				if (*p2 == ' ') {
-					cob_addch (default_prompt_char);
-				} else {
-					cob_addch (*p2);
-				}
-			}
-			/* Put cursor back to original position. */
-			cob_move_cursor (cline, ccolumn);
-			continue;
 		default:
 			break;
 		}
 
-		/* Handle printable character. */
-#if 0 /* FIXME: we can't handle anything > UCHAR_MAX here because of
-		*p = (unsigned char) keyp;
-		--> revise */
 		if (keyp > 037 && keyp < (int)A_CHARTEXT) {
-#else
-		if (keyp > 037 && keyp <= UCHAR_MAX) {
-#endif
-			/* Numeric field check. */
 			if (cob_field_is_numeric_or_numeric_edited (s->field)) {
 				if (keyp < '0' || keyp > '9') {
 					cob_beep ();
 					continue;
 				}
 			}
-
-			/* Handle UPPER/LOWER. */
+			gotbacksp = 0;
 			if (s->attr & COB_SCREEN_UPPER) {
 				if (islower (keyp)) {
 					keyp = toupper (keyp);
@@ -1530,49 +1554,8 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 				}
 			}
 
-			/* Insert character, if requested. */
-			if (cobsetptr->cob_insert_mode == 1) {
-				/* get last character in field */
-				/* check and beep if field is already full,
-				ignore numeric fields for now */
-				if (cob_field_is_numeric_or_numeric_edited (s->field)) {
-					p2 = (unsigned char *)" ";
-				} else {
-					p2 = s->field->data + right_pos - scolumn;
-				}
-				if (*p2 != ' ') {
-					cob_beep ();
-					continue;
-				}
-				/* Move remainder to the right. */
-				for (count = right_pos; count > ccolumn; count--) {
-					/* Get character */
-					p2 = s->field->data + count - scolumn - 1;
-					move_char = *p2;
-					/* Move character one right. */
-					p2 = s->field->data + count - scolumn;
-					*p2 = move_char;
-					/* Update screen with moved character. */
-					if ((int) count > scolumn) {
-						cob_move_cursor (cline, count);
-						if (move_char != ' ') {
-							if (s->attr & COB_SCREEN_NO_ECHO) {
-								cob_addch (COB_CH_SP);
-							} else if (s->attr & COB_SCREEN_SECURE) {
-								cob_addch (COB_CH_AS);
-							} else {
-								cob_addch (move_char);
-							}
-						}
-					}
-				}
-				cob_move_cursor (cline, ccolumn);
-			}
-
-			/* actual storing the key */
 			*p = (unsigned char) keyp;
 
-			/* Display character or '*' if secure. */
 			if (s->attr & COB_SCREEN_SECURE) {
 				cob_addch (COB_CH_AS);
 			} else if (s->attr & COB_SCREEN_NO_ECHO) {
@@ -1580,8 +1563,7 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 			} else {
 				cob_addch ((const chtype)keyp);
 			}
-			if (ccolumn == right_pos) {
-				/* Auto-skip at end of field. */
+			if (ccolumn == rightpos) {
 				if (s->attr & COB_SCREEN_AUTO) {
 					if (curr_index == totl_index - 1) {
 						goto screen_return;
@@ -1590,25 +1572,27 @@ cob_screen_get_all (const int initial_curs, const int get_timeout)
 					}
 				}
 				cob_move_cursor (cline, ccolumn);
-				/* check if we (still) are at last position and inform
-				   user with a beep (after having processed his key) */
-				if (at_eof) {
+				if (ateof) {
 					cob_beep ();
 				} else {
-					at_eof = 1;
+					ateof = 1;
 				}
 			} else {
 				p++;
 			}
 			continue;
 		}
+		gotbacksp = 0;
 		(void)flushinp ();
 		cob_beep ();
 	}
 screen_return:
-	refresh ();
+	wrefresh (actwin);
 }
-
+/**
+this will be called by qsort later. It will assist to sort fields by screen position
+rather then the order they were assigned to cob_base_inp
+**/
 static int
 compare_yx (const void *m1, const void *m2)
 {
@@ -1631,7 +1615,10 @@ compare_yx (const void *m1, const void *m2)
 	}
 	return 0;
 }
-
+/**
+This will move the cursor and update the globals
+that track X and Y.
+**/
 static void
 cob_screen_moveyx (cob_screen *s)
 {
@@ -1643,7 +1630,7 @@ cob_screen_moveyx (cob_screen *s)
 	if (s->line || s->column ||
 	    s->attr & (COB_SCREEN_LINE_PLUS | COB_SCREEN_LINE_MINUS |
 		       COB_SCREEN_COLUMN_PLUS |COB_SCREEN_COLUMN_MINUS)) {
-		getyx (stdscr, y, x);
+		getyx (actwin, y, x);
 #if	1	/* RXWRXW - Column adjust */
 		if (x > 0) {
 			x--;
@@ -1677,12 +1664,18 @@ cob_screen_moveyx (cob_screen *s)
 		}
 
 		cob_move_cursor (line, column);
-		refresh ();
+		wrefresh (actwin);
 		cob_current_y = line;
 		cob_current_x = column;
 	}
 }
-
+/**
+cob_screen is perhaps a bit of a problematic name. They are not full
+screens but rather fields of a full screen. cob_screens are linked lists or parts of them
+This function might process these linked lists by calling itself recursively 
+and calling cob_screen_puts on type matches or by calling cob_screen_puts directly.
+cob_prep_input is only called by screen_accept or itself
+**/
 static size_t
 cob_prep_input (cob_screen *s)
 {
@@ -1730,7 +1723,12 @@ cob_prep_input (cob_screen *s)
 	}
 	return 0;
 }
-
+/**
+cob_screen_iterate is similar to cob_prep_input. It is only called by
+screen_display or itself. It's purpose is the same. It may call itself if
+there is a group or it will call cob_screen_puts or cob_screen_attr
+to set attributes.
+**/
 static void
 cob_screen_iterate (cob_screen *s)
 {
@@ -1763,7 +1761,11 @@ cob_screen_iterate (cob_screen *s)
 		break;
 	}
 }
-
+/**
+ this is used to support extract_line_and_col_vals.
+ line actually contains both the line and field
+ numbers.
+**/
 static void
 get_line_and_col_from_num (cob_field *pos, int *line, int *column)
 {
@@ -1791,6 +1793,9 @@ get_line_and_col_from_num (cob_field *pos, int *line, int *column)
 	*column = (pos_val % max_line_column);
 }
 
+/**
+ this is used to support extract_line_and_col_vals.
+**/
 static void
 get_line_column (cob_field *fline, cob_field *fcol, int *line, int *col)
 {
@@ -1807,18 +1812,30 @@ get_line_column (cob_field *fline, cob_field *fcol, int *line, int *col)
 	}
 }
 
+/**
+ this is used to support extract_line_and_col_vals. In the event
+that col == 0, it will be called to figure out what to assign
+**/
 static COB_INLINE COB_A_INLINE int
 col_where_last_stmt_ended (const enum screen_statement stmt)
 {
 	return stmt == DISPLAY_STATEMENT ? display_cursor_x : accept_cursor_x;
 }
 
+/**
+ this is used to support extract_line_and_col_vals. In the event
+that line == 0, it will be called to figure out what to assign
+**/
 static COB_INLINE COB_A_INLINE int
 line_where_last_stmt_ended (const enum screen_statement stmt)
 {
 	return stmt == DISPLAY_STATEMENT ? display_cursor_y : accept_cursor_y;
 }
-
+/**
+This function will extract line and column from cob_fields but
+it will also set values in the event that either or both of these
+are missing.
+**/
 static void
 extract_line_and_col_vals (cob_field *line, cob_field *column,
 			   const enum screen_statement stmt,
@@ -1880,7 +1897,12 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 
 	/* TO-DO: If scolumn == max_x + 1, go to start of next line */
 }
-
+/**
+cob_screen_display is an entry point into the runtime, it basically
+just calls extract_line_and_col_values and this function, which
+in turn is mostly just responsible for calling cob_screen_iterate
+which is responsible most of the action actually takes place.
+**/
 static void
 screen_display (cob_screen *s, const int line, const int column)
 {
@@ -1895,9 +1917,26 @@ screen_display (cob_screen *s, const int line, const int column)
 		pending_accept = 1;
 	}
 	cob_screen_iterate (s);
-	refresh ();
+	wrefresh (actwin);
 }
 
+/**
+calls cob_prep_input
+if not done already, it allocates memory for the global
+cob_base_inp, which is a location reserved that is big enough to hold 
+all of the screens. After this, qsort, sorts screens stored in 
+cob_base_inp so that they are arranged in a way that makes sense for screen
+navigation. The user needs to be able to tab to different fields and those
+tabbed movements need to take the user to the next field on the screen
+not necessarily the next field that was assigned to cob_base_inp.
+
+Currently there is no support timeout in the SCREEN SECTION and cobc will
+assign a default value.
+
+The call to cob_screen_get_all is critical, this will in turn call 
+finalize_all_fields which in turn calls finalize_field input which in
+turn calls format_field, which is where there is an actual commit of data
+**/
 static void
 screen_accept (cob_screen *s, const int line, const int column,
 	       cob_field *ftimeout)
@@ -1912,7 +1951,7 @@ screen_accept (cob_screen *s, const int line, const int column,
 	size_t			firsty;
 	int			starty;
 	int			initial_curs;
-	int			get_timeout;
+	int			gettimeout;
 
 	init_cob_screen_if_needed ();
 	if (!cob_base_inp) {
@@ -1942,12 +1981,12 @@ screen_accept (cob_screen *s, const int line, const int column,
 	}
 
 	if (ftimeout) {
-		get_timeout = cob_get_int (ftimeout) * COB_TIMEOUT_SCALE;
-		if (get_timeout >= 0 && get_timeout < 500) {
-			get_timeout = 500;
+		gettimeout = cob_get_int (ftimeout) * COB_TIMEOUT_SCALE;
+		if (gettimeout >= 0 && gettimeout < 500) {
+			gettimeout = 500;
 		}
 	} else {
-		get_timeout = -1;
+		gettimeout = -1;
 	}
 
 	/* Sort input fields on line, column */
@@ -1990,43 +2029,54 @@ screen_accept (cob_screen *s, const int line, const int column,
 	if (initial_curs < 0) {
 		initial_curs = 0;
 	}
-	cob_screen_get_all (initial_curs, get_timeout);
+	cob_screen_get_all (initial_curs, gettimeout);
 	cob_check_pos_status (global_return);
 }
+/**
+field display and field accept are perhaps more all-in-one and easier to follow
+than their screen display and screen accept cousins. screen_display's 
+flow of execution is similar to field_display's which is:
 
+Initialize if needed
+Deal with scroll attribute if present(screen_display does not do this)
+figure out lines and columns and move accordingly 
+call out to assign attributes
+add string
+update global line and column values
+refresh the screen
+**/
 static void
 field_display (cob_field *f, const int line, const int column, cob_field *fgc,
 	       cob_field *bgc, cob_field *fscroll, cob_field *size_is,
 	       const cob_flags_t fattr)
 {
-	int	sline;
-	int	scolumn;
-	int	size_display;
-	int	status;
+	int		sline;
+	int		scolumn;
+	int		ssize_is = 0;	/* WITH SIZE IS */
+	int		size_display;	/* final size to display */
+	int		status;
 	char	fig_const;	/* figurative constant character */
-	int	i;
 
-	/* LCOV_EXCL_START */
-	if (unlikely (!f)) {
+	if (unlikely(!f)) {
 		cob_fatal_error(COB_FERROR_CODEGEN);
 	}
-	/* LCOV_EXCL_STOP */
 
 	init_cob_screen_if_needed ();
 
 	origin_y = 0;
 	origin_x = 0;
 
+	/* Field size to display */
+	size_display = (int)f->size;
+	/* WITH SIZE IS */
 	if (size_is) {
-		size_display = cob_get_int (size_is);
-		/* SIZE ZERO is ignored */
-		if (size_display == 0) {
-			size_display = (int)f->size;
+		ssize_is = cob_get_int (size_is);
+		/* Use WITH SIZE IS when less than field size */
+		if (ssize_is > 0 && ssize_is < (int)f->size) {
+			size_display = ssize_is;
 		}
 	} else if (fattr & COB_SCREEN_NO_DISP) {
 		size_display = 0;
-	} else {
-		size_display = (int)f->size;
 	}
 
 	if (fscroll) {
@@ -2034,10 +2084,10 @@ field_display (cob_field *f, const int line, const int column, cob_field *fgc,
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			sline = -sline;
 		}
-		scrollok (stdscr, 1);
-		scrl (sline);
-		scrollok (stdscr, 0);
-		refresh ();
+		scrollok (actwin, 1);
+		wscrl (actwin, sline);
+		scrollok (actwin, 0);
+		wrefresh (actwin);
 	}
 
 	sline = line;
@@ -2049,24 +2099,16 @@ field_display (cob_field *f, const int line, const int column, cob_field *fgc,
 
 	cob_screen_attr (fgc, bgc, fattr, DISPLAY_STATEMENT);
 	if (!(fattr & COB_SCREEN_NO_DISP)) {
-		/* figurative constant and WITH SIZE repeats the literal */
-		if (size_is
-		    && f->attr->type == COB_TYPE_ALPHANUMERIC_ALL) {
-			if ((int)f->size == 1) {
-				fig_const = f->data[0];
-				cob_addnch (size_display, fig_const);
-			} else {
-				for (i = 0; i < (size_display / f->size); ++i) {
-					cob_addnstr ((char *)f->data, f->size);
-				}
-				cob_addnstr ((char *)f->data, size_display % f->size);
-			}
+		/* figurative constant and WITH SIZE repeats the character */
+		if ((size_is)
+		    && f->attr->type == COB_TYPE_ALPHANUMERIC_ALL
+		    && (int)f->size == 1) {
+			fig_const = f->data[0];
+			cob_addnch (ssize_is, fig_const);
 		} else {
-			cob_addnstr ((char *)f->data, cob_min_int (size_display, f->size));
-			if (size_display > f->size) {
-				/* WITH SIZE larger than field displays trailing spaces */
-				cob_addnch (size_display - f->size, COB_CH_SP);
-			}
+			waddnstr (actwin, (char *)f->data, f->size);
+			/* WITH SIZE larger than field displays trailing spaces */
+			cob_addnch (size_display - f->size, COB_CH_SP);
 		}
 	}
 
@@ -2079,8 +2121,39 @@ field_display (cob_field *f, const int line, const int column, cob_field *fgc,
 		}
 		cob_move_cursor (sline, 0);
 	}
-	refresh ();
+	wrefresh (actwin);
 }
+/**
+As stated above, field display and field accept are perhaps more
+all-in-one and easier to follow than their screen_display and
+screen_accept cousins. screen_accept's flow of execution is similar
+to field_accept's which is:
+
+Figure out prompt character
+Initialize if needed
+Deal with timeout if present(screen accept doesn't really do this)
+Deal with scroll attribute if present(screen accept also does not really do this)
+move to correct line and column  
+call out assignment of attributes
+figure out size of field that is to be drawn to screen
+get screen size
+update global line and column values
+add string or chars and handle potential errors. Add secure or prompt char accordingly etc
+move to the correct position
+refresh
+accept user input
+convert keys if needed
+update global_return on certain key presses, these will be available in SPECIAL-NAMES later
+on certain key presses change the screen being acted on and update cursor position
+handle errors that might happen
+
+The final line:
+ cob_move (&temp, f);
+
+is critical, this is the commit of data. With screen_accept, we are committing
+to a cob_field contained in cob_screen, here we are committing directly to 
+a cob_field, in this case f.
+**/
 
 static void
 field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
@@ -2091,26 +2164,27 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 	unsigned char	*p2;
 	size_t		count;
 	int		keyp;
-	int		fret = 0;
+	int		fret;
 	int		cline = 0;
 	size_t		ccolumn = 0;
-	size_t		right_pos;
-	int		at_eof = 0;
+	size_t		rightpos;
+	int		ateof;
 	unsigned char	move_char;      /* data shift character */
 	int		prompt_char;    /* prompt character */
-	int		get_timeout;
+	int		gettimeout;
 	int		status;
-	chtype		default_prompt_char;
+	chtype		promptchar;
+	int		ssize_is = 0;	/* WITH SIZE IS */
 	size_t		size_accept = 0;	/* final size to accept */
-	cob_field	temp_field;
+	cob_field	temp;
 #if	0	/* RXWRXW - Screen update */
 	cob_field	char_temp;
 	unsigned char	space_buff[4];
 #endif
 
 	memset (COB_TERM_BUFF, ' ', (size_t)COB_MEDIUM_MAX);
-	temp_field.data = COB_TERM_BUFF;
-	temp_field.attr = &const_alpha_attr;
+	temp.data = COB_TERM_BUFF;
+	temp.attr = &const_alpha_attr;
 #if	0	/* RXWRXW - Screen update */
 	char_temp.data = space_buff;
 	char_temp.attr = &const_alpha_attr;
@@ -2124,30 +2198,30 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 
 	/* Set the default prompt character */
 	if (prompt) {
-		default_prompt_char = prompt->data[0];
+		promptchar = prompt->data[0];
 	} else {
-		default_prompt_char = COB_CH_UL;
+		promptchar = COB_CH_UL;
 	}
 	init_cob_screen_if_needed ();
 
 	if (ftimeout) {
-		get_timeout = cob_get_int (ftimeout) * COB_TIMEOUT_SCALE;
-		if (get_timeout >= 0 && get_timeout < 500) {
-			get_timeout = 500;
+		gettimeout = cob_get_int (ftimeout) * COB_TIMEOUT_SCALE;
+		if (gettimeout >= 0 && gettimeout < 500) {
+			gettimeout = 500;
 		}
 	} else {
-		get_timeout = -1;
+		gettimeout = -1;
 	}
 
 	if (fscroll) {
 		keyp = cob_get_int (fscroll);
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			keyp = -keyp;
-		}
-		scrollok (stdscr, 1);
+		}	
+        	scrollok (actwin, 1);
 		scrl (keyp);
-		scrollok (stdscr, 0);
-		refresh ();
+		scrollok (actwin, 0);
+		wrefresh (actwin);
 	}
 	cobglobptr->cob_exception_code = 0;
 
@@ -2159,41 +2233,43 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 	cob_screen_attr (fgc, bgc, fattr, ACCEPT_STATEMENT);
 
 	if (f) {
+		/* Field size to accept */
+		size_accept = f->size;
+		/* WITH SIZE IS */
 		if (size_is) {
-			size_accept = cob_get_int (size_is);
-			/* SIZE ZERO is ignored */
-			if (size_accept == 0) {
-				size_accept = (int)f->size;
+			ssize_is = cob_get_int (size_is);
+			/* Use WITH SIZE IS when less than field size */
+			if (ssize_is > 0 && ssize_is < (int)f->size) {
+			  size_accept = ssize_is;
 			}
-		} else {
-			size_accept = f->size;
 		}
 
 		p = COB_TERM_BUFF;
-		temp_field.size = size_accept;
+		temp.size = size_accept;
 		if (fattr & COB_SCREEN_UPDATE) {
-			cob_move (f, &temp_field);
+			cob_move (f, &temp);
 		}
-
+		/* SIZE IS greater than field, blank out trailing screen */
+		if (ssize_is > (int)f->size) {
+			cob_addnch (ssize_is, COB_CH_SP);
+			cob_move_cursor (sline, scolumn);
+		}
 		raise_ec_on_truncation (size_accept);
-		for (count = 0; count < cob_min_int (size_accept, f->size); count++) {
+		for (count = 0; count < size_accept; count++) {
 			if (fattr & COB_SCREEN_SECURE) {
 				cob_addch_no_trunc_check (COB_CH_AS);
 			} else if (fattr & COB_SCREEN_NO_ECHO) {
 				cob_addch_no_trunc_check (COB_CH_SP);
 			} else if (fattr & COB_SCREEN_UPDATE) {
-				cob_addch_no_trunc_check ((const chtype)*p++);
+				fret = *p++;
+				cob_addch_no_trunc_check ((const chtype)fret);
 			} else if (COB_FIELD_IS_NUMERIC (f)) {
 				cob_addch_no_trunc_check ('0');
 			} else if (fattr & COB_SCREEN_PROMPT) {
-				cob_addch_no_trunc_check (default_prompt_char);
+				cob_addch_no_trunc_check (promptchar);
 			} else {
 				cob_addch_no_trunc_check (COB_CH_SP);
 			}
-		}
-		/* SIZE IS greater than field, blank out trailing screen */
-		if (size_accept > (int)f->size) {
-			cob_addnch (size_accept - f->size, COB_CH_SP);
 		}
 		cob_move_cursor (sline, scolumn);
 #if	0	/* RXWRXW - Screen update */
@@ -2209,31 +2285,32 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 		accept_cursor_y = sline;
 		accept_cursor_x = scolumn + size_accept;
 
-		right_pos = scolumn + size_accept - 1;
+		rightpos = scolumn + size_accept - 1;
 		p = COB_TERM_BUFF;
 	} else {
-		right_pos = 0;
+		rightpos = 0;
 		p = NULL;
 	}
+	fret = 0;
+	ateof = 0;
 	count = 0;
 
 	/* Get characters from keyboard, processing each one. */
 	for (; ;) {
-		/* Show prompt characters. */
 		if (f) {
 			/* Get current line, column. */
-			getyx (stdscr, cline, ccolumn);
+			getyx (actwin, cline, ccolumn);
 			/* Trailing prompts. */
 			if (fattr & COB_SCREEN_NO_ECHO) {
 				prompt_char = COB_CH_SP;
 			} else if (COB_FIELD_IS_NUMERIC (f)) {
 				prompt_char = '0';
 			} else if (fattr & COB_SCREEN_PROMPT) {
-				prompt_char = default_prompt_char;
+				prompt_char = promptchar;
 			} else {
 				prompt_char = COB_CH_SP;
 			}
-			for (count = right_pos; (int)count > scolumn - 1; count--) {
+			for (count = rightpos; (int)count > scolumn - 1; count--) {
 				/* Get character */
 				p2 = COB_TERM_BUFF + count - scolumn;
 				move_char = *p2;
@@ -2273,13 +2350,13 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			/* Cursor to current column. */
 			cob_move_cursor (cline, ccolumn);
 			/* Refresh screen. */
-			refresh ();
+			wrefresh (actwin);
 		}
 		errno = 0;
-		timeout (get_timeout);
+		timeout (gettimeout);
 
 		/* Get a character. */
-		keyp = getch ();
+		keyp = wgetch (actwin);
 
 		/* Key error - time out. */
 		if (keyp == ERR) {
@@ -2303,6 +2380,11 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 		switch (keyp) {
 		case KEY_ENTER:
 			/* Enter. */
+			goto field_return;
+                case KEY_MOUSE:
+                        getmouse(&global_mevent); 
+                        fret = 3000 ;
+			// finish later fret = 3000;
 			goto field_return;
 		case KEY_PPAGE:
 			/* Page up. */
@@ -2342,7 +2424,7 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 		}
 
 		/* extension: ACCEPT OMITTED */
-		if (unlikely (!f)) {
+		if (unlikely(!f)) {
 			/* special keys for ACCEPT OMITTED */
 			switch (keyp) {
 			case KEY_LEFT:
@@ -2384,7 +2466,7 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			/* Backspace key. */
 			if ((int) ccolumn > scolumn) {
 				/* Shift remainder left with cursor. */
-				for (count = ccolumn; count < right_pos + 1; count++) {
+				for (count = ccolumn; count < rightpos + 1; count++) {
 					/* Get character. */
 					p2 = COB_TERM_BUFF + count - scolumn ;
 					move_char = *p2;
@@ -2414,85 +2496,69 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 				ccolumn--;
 				cob_move_cursor (cline, ccolumn);
 				p--;
-			} else {
-				cob_beep ();
 			}
-			at_eof = 0;
+			ateof = 0;
 			continue;
 		case KEY_HOME:
-			/* HOME key. */
+			/* Home key, cursor to start of characters. */
 			/* Prepare for empty field. */
+			ccolumn = rightpos;
 			move_char = ' ';
-			/* Find non-blank character left to right. */
-			for (count = scolumn; count <= right_pos; count++) {
+			/* Find non-blank from left. */
+			for (count = scolumn; count <= rightpos; count++) {
 				/* Get character. */
 				p2 = COB_TERM_BUFF + count - scolumn;
 				move_char = *p2;
-				/* Stop at beginning non-blank character. */
+				/* Non blank stop. */
 				if (move_char != ' ') {
+					ccolumn = count;
 					break;
 				}
 			}
-			/* Empty field. */
-			if (move_char == ' ') {
-				count = ccolumn;
-			}
-			/* Toggle between start of characters or start of field. */
-			if (count != ccolumn) {
-				/* Cursor to start of characters. */
-				ccolumn = count;
-				cob_move_cursor (cline, ccolumn);
-				p = COB_TERM_BUFF + ccolumn - scolumn;
-			} else {
-				/* Cursor to start of field. */
-				cob_move_cursor (sline, scolumn);
-				p = COB_TERM_BUFF;
-			}
-			/* Reset */
-			at_eof = 0;
+			cob_move_cursor (cline, ccolumn);
+			p = COB_TERM_BUFF + ccolumn - scolumn;
+			ateof = 0;
+			continue;
+		case 01026:
+			/* Alt-Home key, cursor to start of field. */
+			cob_move_cursor (sline, scolumn);
+			p = COB_TERM_BUFF;
+			ateof = 0;
 			continue;
 		case KEY_END:
-			/* END key. */
+			/* End key, cursor to end of characters. */
 			/* Prepare for empty field. */
+			ccolumn = scolumn;
 			move_char = ' ';
-			/* Find non-blank character right to left. */
-			for (count = right_pos; (int) count >= scolumn; count--) {
+			/* Find non blank from right. */
+			for (count = rightpos; (int) count >= scolumn; count--) {
 				/* Get character. */
 				p2 = COB_TERM_BUFF + count - scolumn;
 				move_char = *p2;
-				/* Stop at ending non-blank character. */
+				/* Non blank stop. */
 				if (move_char != ' ') {
+					ccolumn = count;
 					break;
 				}
 			}
-			/* Empty field. */
-			if (move_char == ' ') {
-				count = ccolumn;
-			} else {
-				/* Cursor to first blank after ending character. */
-				if (count != right_pos) {
-					count++;
-				}
+			/* Cursor to first blank after. */
+			if (move_char != ' ' && ccolumn != rightpos) {
+				ccolumn++;
 			}
-			/* Toggle between end of characters or end of field. */
-			if (count != ccolumn) {
-				/* Cursor after end character. */
-				ccolumn = count;
-				cob_move_cursor (cline, ccolumn);
-				p = COB_TERM_BUFF + ccolumn - scolumn;
-			} else {
-				/* Cursor to end of size of field */
-				cob_move_cursor (sline, right_pos);
-				p = COB_TERM_BUFF + size_accept - 1;
-			}
-			/* Reset */
-			at_eof = 0;
+			cob_move_cursor (cline, ccolumn);
+			p = COB_TERM_BUFF + ccolumn - scolumn;
+			ateof = 0;
+			continue;
+		case 01021:
+			/* Alt-End key, cursor to end of size of field */
+			cob_move_cursor (sline, rightpos);
+			p = COB_TERM_BUFF + size_accept - 1;
+			ateof = 0;
 			continue;
 		case KEY_LEFT:
-		case ALT_LEFT:
-			/* Left-arrow     KEY_LEFT auto-skip. */
-			/* Alt-left-arrow ALT_LEFT no auto-skip. */
-			at_eof = 0;
+		case KEY_CLOSE:
+			/* Left-arrow     KEY_LEFT  auto-skip. */
+			/* Alt-left-arrow KEY_CLOSE no auto-skip. */
 			if ((int) ccolumn > scolumn) {
 				ccolumn--;
 				cob_move_cursor (cline, ccolumn);
@@ -2507,10 +2573,10 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			cob_beep ();
 			continue;
 		case KEY_RIGHT:
-		case ALT_RIGHT:
-			/* Right-arrow     KEY_RIGHT auto-skip. */
-			/* Alt-right-arrow ALT_RIGHT no auto-skip. */
-			if (ccolumn < right_pos) {
+		case KEY_PREVIOUS:
+			/* Right-arrow     KEY_RIGHT    auto-skip. */
+			/* Alt-right-arrow KEY_PREVIOUS no auto-skip. */
+			if (ccolumn < rightpos) {
 				ccolumn++;
 				cob_move_cursor (cline, ccolumn);
 				p = COB_TERM_BUFF + ccolumn - scolumn;
@@ -2524,23 +2590,24 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			cob_beep ();
 			continue;
 		case KEY_IC:
-			/* Insert key toggle */
-			/* If off turn on, if on turn off;
-			   additional: switch between vertical bar cursor (on) and
-			   square cursor (off) - note: the cursor change may have no
-			   effect in all curses implementations / terminals */
+			/* Insert key toggle. */
+			/* If off turn on, if on turn off. */
 			if (cobsetptr->cob_insert_mode == 0) {
 				cobsetptr->cob_insert_mode = 1;     /* on */
-				(void)curs_set(1);	/* switch to vertical bar cursor */
+				/* to do, needs vertical bar cursor */
+				/* this doesn't seem to work */
+				count = curs_set(1);
 			} else {
 				cobsetptr->cob_insert_mode = 0;     /* off */
-				(void)curs_set(2);	/* switch to square cursor */
+				/* to do, needs square cursor */
+				/* this doesn't seem to work */
+				count = curs_set(2);
 			}
 			continue;
 		case KEY_DC:
 			/* Delete key. */
 			/* Delete character, move remainder left. */
-			for (count = ccolumn; count < right_pos; count++) {
+			for (count = ccolumn; count < rightpos; count++) {
 				/* Get character one position to right. */
 				p2 = COB_TERM_BUFF + count - scolumn + 1;
 				move_char = *p2;
@@ -2569,9 +2636,9 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			/* Put cursor back to original position. */
 			cob_move_cursor (cline, ccolumn);
 			continue;
-		case ALT_DEL:
+		case KEY_EOL:
 			/* Alt-Delete key, erase cursor to end of field. */
-			for (count = ccolumn; count <= right_pos; count++) {
+			for (count = ccolumn; count <= rightpos; count++) {
 				/* Character position. */
 				p2 = COB_TERM_BUFF + count - scolumn;
 				/* Blank character. */
@@ -2598,14 +2665,8 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			break;
 		}
 
-		/* Handle printable character. */
-#if 0 /* FIXME: we can't handle anything > UCHAR_MAX here because of
-		*p = (unsigned char) keyp;
-		--> revise */
-		if (keyp > 037 && keyp < (int)A_CHARTEXT) {
-#else
-		if (keyp > 037 && keyp <= UCHAR_MAX) {
-#endif
+		/* Printable character. */
+		if (keyp > '\037' && keyp < (int)A_CHARTEXT) {
 			/* Numeric field check. */
 			if (cob_field_is_numeric_or_numeric_edited (f)) {
 				if (keyp < '0' || keyp > '9') {
@@ -2613,8 +2674,6 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 					continue;
 				}
 			}
-
-			/* Handle UPPER/LOWER. */
 			if (fattr & COB_SCREEN_UPPER) {
 				if (islower (keyp)) {
 					keyp = toupper (keyp);
@@ -2624,24 +2683,10 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 					keyp = tolower (keyp);
 				}
 			}
-
-			/* Insert character, if requested. */
-			if (cobsetptr->cob_insert_mode == 1
-			 && size_accept > 1) {
-				/* get last character in field */
-				/* check and beep if field is already full,
-				   ignore numeric fields for now */
-				if (cob_field_is_numeric_or_numeric_edited (f)) {
-					p2 = (unsigned char *)" ";
-				} else {
-					p2 = COB_TERM_BUFF + right_pos - scolumn;
-				}
-				if (*p2 != ' ') {
-					cob_beep ();
-					continue;
-				}
+			/* Insert character. */
+			if (cobsetptr->cob_insert_mode == 1) {
 				/* Move remainder to the right. */
-				for (count = right_pos; count > ccolumn; count--) {
+				for (count = rightpos; count > ccolumn - 1; count--) {
 					/* Get character */
 					p2 = COB_TERM_BUFF + count - scolumn - 1;
 					move_char = *p2;
@@ -2664,10 +2709,7 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 				}
 				cob_move_cursor (cline, ccolumn);
 			}
-
-			/* actual storing the key */
 			*p = (unsigned char)keyp;
-
 			count = 1;
 			/* Display character or '*' if secure. */
 			if (fattr & COB_SCREEN_SECURE) {
@@ -2677,18 +2719,16 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 			} else {
 				cob_addch ((const chtype)keyp);
 			}
-			if (ccolumn == right_pos) {
+			if (ccolumn == rightpos) {
 				/* Auto-skip at end of field. */
 				if (fattr & COB_SCREEN_AUTO) {
 					break;
 				}
 				cob_move_cursor (cline, ccolumn);
-				/* check if we (still) are at last position and inform
-				   user with a beep (after having processed his key) */
-				if (at_eof) {
+				if (ateof) {
 					cob_beep ();
 				} else {
-					at_eof = 1;
+					ateof = 1;
 				}
 			} else {
 				p++;
@@ -2700,14 +2740,14 @@ field_accept (cob_field *f, const int sline, const int scolumn, cob_field *fgc,
 	}
  field_return:
 	if (f) {
-		cob_move_cursor (sline, right_pos + 1);
+		cob_move_cursor (sline, rightpos + 1);
 	}
-	refresh ();
+	wrefresh (actwin);
 	cob_check_pos_status (fret);
 	if (!f) {
 		return;
 	}
-	cob_move (&temp_field, f);
+	cob_move (&temp, f);
 }
 
 static void
@@ -2741,6 +2781,11 @@ field_display_at_curpos (cob_field *f,
 
 /* Global functions */
 
+/**
+This is an entry point into the runtime. If a screen is defined in the
+SCREEN SECTION and a display statement is used to display it to the screen,
+this is the function that will be called.
+**/
 void
 cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
 		    const int zero_line_col_allowed)
@@ -2752,6 +2797,12 @@ cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
 				   zero_line_col_allowed, &sline, &scolumn);
 	screen_display (s, sline, scolumn);
 }
+
+/**
+This is an entry point into the runtime. If a screen is defined in the
+SCREEN SECTION and an accept statement is used to accept input,
+this is the function that will be called.
+**/
 void
 cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column,
 		   cob_field *ftimeout, const int zero_line_col_allowed)
@@ -2763,6 +2814,12 @@ cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column,
 				   zero_line_col_allowed, &sline, &scolumn);
 	screen_accept (s, sline, scolumn, ftimeout);
 }
+/**
+This is an entry point into the runtime. If a DISPLAY FOO AT statement is used to accept input,
+this is the function that will be called, the enhanced display and accept are
+procedural statements that define col and line, etc characteristics directly 
+within the statement itself, rather then the SCREEN SECTION
+**/
 
 void
 cob_field_display (cob_field *f, cob_field *line, cob_field *column,
@@ -2782,6 +2839,12 @@ cob_field_display (cob_field *f, cob_field *line, cob_field *column,
 				   &scolumn);
 	field_display (f, sline, scolumn, fgc, bgc, fscroll, size_is, fattr);
 }
+/**
+As above, This is an entry point into the runtime. If ACCEPT FOO AT statement is used to accept input,
+this is the function that will be called, the enhanced display and accept are
+procedural statements that define col and etc line characteristics directly 
+within the statement itself, rather then the SCREEN SECTION
+**/
 
 void
 cob_field_accept (cob_field *f, cob_field *line, cob_field *column,
@@ -2803,9 +2866,8 @@ int
 cob_sys_clear_screen (void)
 {
 	init_cob_screen_if_needed ();
-
-	clear ();
-	refresh ();
+	wclear (actwin);
+	wrefresh (actwin);
 	cob_current_y = 0;
 	cob_current_x = 0;
 	return 0;
@@ -2814,15 +2876,13 @@ cob_sys_clear_screen (void)
 void
 cob_screen_set_mode (const cob_u32_t smode)
 {
-	init_cob_screen_if_needed ();
-
 	if (!smode) {
-		refresh ();
+		wrefresh (actwin);
 		def_prog_mode ();
 		endwin ();
 	} else {
 		reset_prog_mode ();
-		refresh ();
+		wrefresh (actwin);
 	}
 }
 
@@ -2832,8 +2892,6 @@ cob_display_text (const char *text)
 {
 	cob_field	field;
 	cob_field_attr	attr;
-
-	init_cob_screen_if_needed ();
 
 	if (text[0] == 0) return 0;
 
@@ -2845,32 +2903,23 @@ cob_display_text (const char *text)
 	return 0;
 }
 
-/* C: get a char x'01' thru x'255' or keyboard status > 1000  (or 0)
-      without any prompt */
+/* C: get a char x'01' thru x'255' or keyboard status > 1000  (or 0) */
 int
 cob_get_char (void)
 {
 	cob_field		field;
-	char			c = ' ';
+	unsigned char		c = ' ';
 	cob_field_attr		attr;
 
-	init_cob_screen_if_needed ();
-
-	COB_FIELD_INIT (1, (unsigned char *)&c, &attr);
+	COB_FIELD_INIT (1, &c, &attr);
 	COB_ATTR_INIT (COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL);
 
 	field_accept_from_curpos (&field, NULL, NULL, NULL, NULL, NULL, NULL,
-		COB_SCREEN_AUTO | COB_SCREEN_NO_ECHO);
-
-	/* CHECKME: MF docs are not clear: should this return 0 ? */
+				  COB_SCREEN_AUTO);
 	if (c == ' ') {
 		return COB_ACCEPT_STATUS;
-#if EOF != -1
-	} else if (c == EOF) {
-		return -1;
-#endif
 	} else {
-		return c;
+		return (int)c;
 	}
 }
 
@@ -2880,8 +2929,6 @@ cob_get_text (char *text, int size)
 {
 	cob_field	field;
 	cob_field_attr	attr;
-
-	init_cob_screen_if_needed ();
 
 	if (size > 0) {
 		COB_FIELD_INIT (size, (unsigned char *)text, &attr);
@@ -2904,8 +2951,6 @@ cob_display_formatted_text (const char *fmt, ...)
 	va_list		ap;
 	char		buff [COB_NORMAL_BUFF];
 
-	init_cob_screen_if_needed ();
-
 	va_start (ap, fmt);
 	size = vsnprintf (buff, COB_NORMAL_BUFF, fmt, ap);
 	va_end (ap);
@@ -2927,10 +2972,14 @@ cob_display_formatted_text (const char *fmt, ...)
 
 	return 0;
 }
-
+/**
+clean up and exit, memory is freed, windows are destroyed etc
+we don't want to localize these ncurses calls, we want a full screen shutdown, not just a window
+**/
 void
 cob_exit_screen (void)
 {
+
 	cob_flags_t	flags;
 	char		exit_msg[COB_MINI_BUFF];
 
@@ -2952,6 +3001,7 @@ cob_exit_screen (void)
 		clear ();
 		cob_move_to_beg_of_last_line ();
 		delwin (stdscr);
+                actwin = NULL ;
 		endwin ();
 #ifdef	HAVE_CURSES_FREEALL
 		_nc_freeall ();
@@ -2964,7 +3014,14 @@ cob_exit_screen (void)
 	COB_ACCEPT_STATUS = 0;
 }
 
+/*this is the "else portion" of the large compiler directive that spans most of the file */
+
 #else	/* COB_GEN_SCREENIO */
+
+/* below are largely non-functional stub versions of the functions above
+for those that do not have ncurses and might call functions that
+depend on ncurses
+*/
 
 void
 cob_exit_screen (void)
@@ -3038,7 +3095,17 @@ cob_sys_clear_screen (void)
 	return 0;
 }
 
+/* the end of the large compiler directive that splits most of the file */
+
 #endif	/* COB_GEN_SCREENIO */
+
+
+
+/* while the large compiler directive split functional functions
+from the largely non-functional ones above, these functions are more of a 2 for 1,
+with compiler directives splitting the functions themselves into stub and 
+truly functional halves.
+*/
 
 void
 cob_screen_line_col (cob_field *f, const int l_or_c)
@@ -3093,10 +3160,9 @@ cob_sys_get_csr_pos (unsigned char *fld)
 #endif
 
 	COB_CHK_PARMS (CBL_GET_CSR_POS, 1);
-	init_cob_screen_if_needed ();
 
 #ifdef	COB_GEN_SCREENIO
-	getyx (stdscr, cline, ccol);
+	getyx (actwin, cline, ccol);
 	fld[0] = (unsigned char)cline;
 	fld[1] = (unsigned char)ccol;
 
@@ -3113,38 +3179,37 @@ cob_sys_get_csr_pos (unsigned char *fld)
    No implementation of MF function tables so far.
 */
 int
-cob_sys_get_char (unsigned char *fld)
+cob_sys_get_char (char c)
 {
 #ifdef	COB_GEN_SCREENIO
 	int ret;
 #endif
 
 	COB_CHK_PARMS (CBL_READ_KBD_CHAR, 1);
-	/* note: screen init done in called cob_get_char */
 
 #ifdef	COB_GEN_SCREENIO
 	if (!got_sys_char) {
 		ret = cob_get_char ();
 		if (ret > 255) {
-			*fld = 0;
+			c = 0;
 			got_sys_char = 1;
 		} else {
-			*fld = (unsigned char) ret;
+			c = (char) ret;
 		}
 	} else {
 		got_sys_char = 0;
 		if (COB_ACCEPT_STATUS == 0) {
-			return cob_sys_get_char (fld);
+			return cob_sys_get_char (c);
 		} else if (COB_ACCEPT_STATUS > 1000 && COB_ACCEPT_STATUS < 1201) {
-			*fld = (unsigned char) (COB_ACCEPT_STATUS - 1000);
+			c = (char) (COB_ACCEPT_STATUS - 1000);
 		} else if (COB_ACCEPT_STATUS > 2000 && COB_ACCEPT_STATUS < 2056) {
-			*fld = (unsigned char) (COB_ACCEPT_STATUS - 1800);
+			c = (char) (COB_ACCEPT_STATUS - 1800);
 		} else {
 			return -1;
 		}
 	}
 #else
-	COB_UNUSED (fld);
+	COB_UNUSED (c);
 #endif
 	return 0;
 }
@@ -3159,9 +3224,9 @@ cob_sys_set_csr_pos (unsigned char *fld)
 #endif
 
 	COB_CHK_PARMS (CBL_SET_CSR_POS, 1);
-	init_cob_screen_if_needed ();
 
 #ifdef	COB_GEN_SCREENIO
+	init_cob_screen_if_needed ();
 	cline = fld[0];
 	ccol= fld[1];
 	return move (cline, ccol);
@@ -3176,9 +3241,9 @@ int
 cob_sys_get_scr_size (unsigned char *line, unsigned char *col)
 {
 	COB_CHK_PARMS (CBL_GET_SCR_SIZE, 2);
-	init_cob_screen_if_needed ();
 
 #ifdef	COB_GEN_SCREENIO
+	init_cob_screen_if_needed ();
 	*line = (unsigned char)LINES;
 	*col = (unsigned char)COLS;
 #else

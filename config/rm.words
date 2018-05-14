@@ -66,7 +66,6 @@ reserved:	BEEP=BELL
 reserved:	BEFORE
 reserved:	BELL
 reserved:	BINARY
-reserved:	BINARY-SEQUENTIAL*
 reserved:	BLANK
 reserved:	BLINK
 reserved:	BLOCK
@@ -253,7 +252,6 @@ reserved:	LIMITS
 reserved:	LINAGE
 reserved:	LINAGE-COUNTER
 reserved:	LINE
-reserved:	LINE-SEQUENTIAL*
 reserved:	LINES
 reserved:	LINKAGE
 reserved:	LOCK
@@ -422,6 +420,7 @@ reserved:	VALUE
 reserved:	VALUES=VALUE
 reserved:	VARYING
 reserved:	WHEN
+reserved:	WHEN-COMPILED
 reserved:	WHILE*
 reserved:	WITH
 reserved:	WORDS
@@ -475,35 +474,9 @@ reserved:	TYPE
 reserved:	VARIABLE
 
 
-# list of registers:
-# TO-DO: Should PROCEDURE-NAME [IN|OF] {PARAGRAPH|PROCEDURE|SECTION} be a register?
 not-register:	DIALECT-ALL	# disable all registers, specify used below
-# register:	"ADDRESS\ IN"
-register:	"ADDRESS\ OF"
-# register:	"COUNT-MAX\ IN"
-# register:	"COUNT-MAX\ OF"
-# register:	"COUNT-MIN\ IN"
-# register:	"COUNT-MIN\ OF"
-# register:	"COUNT\ IN"
-# register:	"COUNT\ OF"
-register:	DEBUG-ITEM
-# register:	"HIGHEST-VALUE\ IN"
-# register:	"HIGHEST-VALUE\ OF"
-# register:	"INITIAL-VALUE\ IN"
-# register:	"INITIAL-VALUE\ OF"
-# register:	"LENGTH\ IN"
-register:	"LENGTH\ OF"
-# register:	"LINAGE-COUNTER\ IN"
-# register:	"LINAGE-COUNTER\ OF"
-# register:	"LOWEST-VALUE\ IN"
-# register:	"LOWEST-VALUE\ OF"
-# register:	"MAX-VALUE\ IN"
-# register:	"MAX-VALUE\ OF"
-# register:	"MIN-VALUE\ IN"
-# register:	"MIN-VALUE\ OF"
-# register:	PROGRAM-ID
-register:	RETURN-CODE
-register:	WHEN-COMPILED
+#register:	"ADDRESS\ OF"	# not yet handled as register in GnuCOBOL
+#register:	"DEBUG-ITEM"	# not yet handled as register in GnuCOBOL
 
 
 # list of system names:

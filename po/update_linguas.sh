@@ -8,30 +8,19 @@ echo "Updating translations via TP"
 rsync -Lrtvz  translationproject.org::tp/latest/gnucobol/ . # || exit
 
 # Are there now PO files that are not in svn yet?
-NEWSTUFF=$(svn status | grep "^\? .*.po$" | sed -e's/\? *//')
+NEWSTUFF=$(svn status | grep "^\? .*.po$")
 
 if [ -n "${NEWSTUFF}" ]; then
-    echo; echo "New languages found; updating LINGUAS ..."
+    echo "New languages found; updating LINGUAS"
     echo "# List of available languages." >LINGUAS
-    echo "en@boldquot en@quot" $(printf '%s\n' *.po | LC_ALL=C sort | sed -e 's/\.po//g' -e 's/en\@.*//g') >>LINGUAS
-    echo "... and adding new files to svn:"
-    for file in "${NEWSTUFF}"; do svn add $file; done
+    echo $(printf '%s\n' *.po | LC_ALL=C sort | sed 's/\.po//g') >>LINGUAS
 fi
 
-echo; echo "Regenerating POT file and remerging and recompiling PO files..."
+echo "Regenerating POT file and remerging and recompiling PO files..."
+make update-po
 
-if test -f Makefile; then
-  make update-po
+# Ensure that the PO files are newer than the POT.
+touch *.po
 
-  # Ensure that the PO files are newer than the POT.
-  touch *.po
-
-  # Compile PO files
-  make
-
-else
-
-  echo; echo "WARNING: no Makefile available!"
-  echo "remerge and compilation of PO files isn't done yet"
-  echo;
-fi
+# Compile PO files
+make

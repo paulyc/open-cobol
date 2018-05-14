@@ -1,6 +1,6 @@
 /*
-   Copyright (C) 2002-2014, 2016-2017 Free Software Foundation, Inc.
-   Written by Keisuke Nishida, Roger While, Edward Hart, Simon Sobisch
+   Copyright (C) 2002-2014 Free Software Foundation, Inc.
+   Written by Keisuke Nishida, Roger While
 
    This file is part of GnuCOBOL.
 
@@ -49,8 +49,6 @@ struct dlm_struct {
 
 /* Local variables */
 
-static cob_global		*cobglobptr = NULL;
-
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
 static const cob_field_attr	const_strall_attr =
@@ -60,9 +58,7 @@ static cob_field		*inspect_var;
 static unsigned char		*inspect_data;
 static unsigned char		*inspect_start;
 static unsigned char		*inspect_end;
-static signed int			*inspect_mark;	/* note: we use signed int here instead of char
-											   as we currently set / check -1 as an
-											   alternative to the actual unsigned char *data */
+static int			*inspect_mark;
 static size_t			inspect_mark_size;
 static size_t			inspect_size;
 static cob_u32_t		inspect_replacing;
@@ -145,10 +141,10 @@ inspect_common (cob_field *f1, cob_field *f2, const int type)
 	int		i;
 	int		len;
 
-	if (unlikely (!f1)) {
+	if (unlikely(!f1)) {
 		f1 = &str_cob_low;
 	}
-	if (unlikely (!f2)) {
+	if (unlikely(!f2)) {
 		f2 = &str_cob_low;
 	}
 
@@ -228,7 +224,7 @@ cob_inspect_init (cob_field *var, const cob_u32_t replacing)
 	size_t		i;
 	size_t		digcount;
 
-	if (unlikely (COB_FIELD_IS_NUMDISP (var))) {
+	if (unlikely(COB_FIELD_IS_NUMDISP (var))) {
 		inspect_var_copy = *var;
 		inspect_var = &inspect_var_copy;
 		inspect_sign = COB_GET_SIGN (var);
@@ -251,7 +247,7 @@ cob_inspect_init (cob_field *var, const cob_u32_t replacing)
 	for (i = 0; i < inspect_size; ++i) {
 		inspect_mark[i] = -1;
 	}
-	cobglobptr->cob_exception_code = 0;
+	cob_set_exception (0);
 }
 
 void
@@ -351,10 +347,10 @@ cob_inspect_converting (const cob_field *f1, const cob_field *f2)
 	size_t	j;
 	size_t	len;
 
-	if (unlikely (!f1)) {
+	if (unlikely(!f1)) {
 		f1 = &str_cob_low;
 	}
-	if (unlikely (!f2)) {
+	if (unlikely(!f2)) {
 		f2 = &str_cob_low;
 	}
 	if (f1->size != f2->size) {
@@ -387,12 +383,12 @@ cob_inspect_finish (void)
 	if (inspect_replacing) {
 		for (i = 0; i < inspect_size; ++i) {
 			if (inspect_mark[i] != -1) {
-				inspect_data[i] = (unsigned char)inspect_mark[i];
+				inspect_data[i] = inspect_mark[i];
 			}
 		}
 	}
 
-	if (unlikely (inspect_var)) {
+	if (unlikely(inspect_var)) {
 		COB_PUT_SIGN (inspect_var, inspect_sign);
 	}
 }
@@ -410,7 +406,7 @@ cob_string_init (cob_field *dst, cob_field *ptr)
 		string_ptr = &string_ptr_copy;
 	}
 	string_offset = 0;
-	cobglobptr->cob_exception_code = 0;
+	cob_set_exception (0);
 
 	if (string_ptr) {
 		string_offset = cob_get_int (string_ptr) - 1;
@@ -438,7 +434,7 @@ cob_string_append (cob_field *src)
 	int	i;
 	int	size;
 
-	if (cobglobptr->cob_exception_code) {
+	if (cob_get_exception_code ()) {
 		return;
 	}
 
@@ -492,7 +488,7 @@ cob_unstring_init (cob_field *src, cob_field *ptr, const size_t num_dlm)
 	unstring_offset = 0;
 	unstring_count = 0;
 	unstring_ndlms = 0;
-	cobglobptr->cob_exception_code = 0;
+	cob_set_exception (0);
 	if (num_dlm > dlm_list_size) {
 		cob_free (dlm_list);
 		dlm_list = cob_malloc (num_dlm * sizeof(struct dlm_struct));
@@ -530,7 +526,7 @@ cob_unstring_into (cob_field *dst, cob_field *dlm, cob_field *cnt)
 	int		match_size = 0;
 	int		brkpt = 0;
 
-	if (cobglobptr->cob_exception_code) {
+	if (cob_get_exception_code ()) {
 		return;
 	}
 
@@ -644,9 +640,8 @@ cob_exit_strings (void)
 }
 
 void
-cob_init_strings (cob_global *lptr)
+cob_init_strings (void)
 {
-	cobglobptr = lptr;
 	inspect_mark = cob_malloc ((size_t)COB_NORMAL_BUFF);
 	dlm_list = cob_malloc (DLM_DEFAULT_NUM * sizeof(struct dlm_struct));
 	inspect_mark_size = COB_NORMAL_BUFF;

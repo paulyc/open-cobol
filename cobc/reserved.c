@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2001-2012, 2014-2018 Free Software Foundation, Inc.
+   Copyright (C) 2001-2012, 2014-2017 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart
 
    This file is part of GnuCOBOL.
@@ -51,8 +51,8 @@ static struct system_name_struct	system_name_table[] = {
 	{"SYSLST",		CB_DEVICE_NAME,  CB_DEVICE_SYSOUT, CB_FEATURE_ACTIVE},
 	{"STDOUT",		CB_DEVICE_NAME,  CB_DEVICE_SYSOUT, CB_FEATURE_ACTIVE},
 	{"PRINT",		CB_DEVICE_NAME,  CB_DEVICE_SYSOUT, CB_FEATURE_ACTIVE},
-	{"PRINTER",		CB_DEVICE_NAME,  CB_DEVICE_PRINTER, CB_FEATURE_ACTIVE},
-	{"PRINTER-1",		CB_DEVICE_NAME,  CB_DEVICE_PRINTER, CB_FEATURE_ACTIVE},
+	{"PRINTER",		CB_DEVICE_NAME,  CB_DEVICE_SYSOUT, CB_FEATURE_ACTIVE},
+	{"PRINTER-1",		CB_DEVICE_NAME,  CB_DEVICE_SYSOUT, CB_FEATURE_ACTIVE},
 	{"SYSERR",		CB_DEVICE_NAME,  CB_DEVICE_SYSERR, CB_FEATURE_ACTIVE},
 	{"STDERR",		CB_DEVICE_NAME,  CB_DEVICE_SYSERR, CB_FEATURE_ACTIVE},
 	{"CONSOLE",		CB_DEVICE_NAME,  CB_DEVICE_CONSOLE, CB_FEATURE_ACTIVE},
@@ -185,76 +185,31 @@ static struct system_name_struct	system_name_table[] = {
 	{"UPSI-5",		CB_SWITCH_NAME,  CB_SWITCH_5, CB_FEATURE_DISABLED},
 	{"UPSI-6",		CB_SWITCH_NAME,  CB_SWITCH_6, CB_FEATURE_DISABLED},
 	{"UPSI-7",		CB_SWITCH_NAME,  CB_SWITCH_7, CB_FEATURE_DISABLED},
-	{"UPSI-8",		CB_SWITCH_NAME,  CB_SWITCH_8, CB_FEATURE_DISABLED},
-	/* TO-DO: Figure out TSW switches differ from USW switches and add them. */
-	{"USW-0",		CB_SWITCH_NAME,  CB_SWITCH_0, CB_FEATURE_DISABLED},
-	{"USW-1",		CB_SWITCH_NAME,  CB_SWITCH_1, CB_FEATURE_DISABLED},
-	{"USW-2",		CB_SWITCH_NAME,  CB_SWITCH_2, CB_FEATURE_DISABLED},
-	{"USW-3",		CB_SWITCH_NAME,  CB_SWITCH_3, CB_FEATURE_DISABLED},
-	{"USW-4",		CB_SWITCH_NAME,  CB_SWITCH_4, CB_FEATURE_DISABLED},
-	{"USW-5",		CB_SWITCH_NAME,  CB_SWITCH_5, CB_FEATURE_DISABLED},
-	{"USW-6",		CB_SWITCH_NAME,  CB_SWITCH_6, CB_FEATURE_DISABLED},
-	{"USW-7",		CB_SWITCH_NAME,  CB_SWITCH_7, CB_FEATURE_DISABLED},
-	{"USW-8",		CB_SWITCH_NAME,  CB_SWITCH_8, CB_FEATURE_DISABLED},
-	{"USW-9",		CB_SWITCH_NAME,  CB_SWITCH_9, CB_FEATURE_DISABLED},
-	{"USW-10",		CB_SWITCH_NAME,  CB_SWITCH_10, CB_FEATURE_DISABLED},
-	{"USW-11",		CB_SWITCH_NAME,  CB_SWITCH_11, CB_FEATURE_DISABLED},
-	{"USW-12",		CB_SWITCH_NAME,  CB_SWITCH_12, CB_FEATURE_DISABLED},
-	{"USW-13",		CB_SWITCH_NAME,  CB_SWITCH_13, CB_FEATURE_DISABLED},
-	{"USW-14",		CB_SWITCH_NAME,  CB_SWITCH_14, CB_FEATURE_DISABLED},
-	{"USW-15",		CB_SWITCH_NAME,  CB_SWITCH_15, CB_FEATURE_DISABLED},
-	{"USW-16",		CB_SWITCH_NAME,  CB_SWITCH_16, CB_FEATURE_DISABLED},
-	{"USW-17",		CB_SWITCH_NAME,  CB_SWITCH_17, CB_FEATURE_DISABLED},
-	{"USW-18",		CB_SWITCH_NAME,  CB_SWITCH_18, CB_FEATURE_DISABLED},
-	{"USW-19",		CB_SWITCH_NAME,  CB_SWITCH_19, CB_FEATURE_DISABLED},
-	{"USW-20",		CB_SWITCH_NAME,  CB_SWITCH_20, CB_FEATURE_DISABLED},
-	{"USW-21",		CB_SWITCH_NAME,  CB_SWITCH_21, CB_FEATURE_DISABLED},
-	{"USW-22",		CB_SWITCH_NAME,  CB_SWITCH_22, CB_FEATURE_DISABLED},
-	{"USW-23",		CB_SWITCH_NAME,  CB_SWITCH_23, CB_FEATURE_DISABLED},
-	{"USW-24",		CB_SWITCH_NAME,  CB_SWITCH_24, CB_FEATURE_DISABLED},
-	{"USW-25",		CB_SWITCH_NAME,  CB_SWITCH_25, CB_FEATURE_DISABLED},
-	{"USW-26",		CB_SWITCH_NAME,  CB_SWITCH_26, CB_FEATURE_DISABLED},
-	{"USW-27",		CB_SWITCH_NAME,  CB_SWITCH_27, CB_FEATURE_DISABLED},
-	{"USW-28",		CB_SWITCH_NAME,  CB_SWITCH_28, CB_FEATURE_DISABLED},
-	{"USW-29",		CB_SWITCH_NAME,  CB_SWITCH_29, CB_FEATURE_DISABLED},
-	{"USW-30",		CB_SWITCH_NAME,  CB_SWITCH_30, CB_FEATURE_DISABLED},
-	{"USW-31",		CB_SWITCH_NAME,  CB_SWITCH_31, CB_FEATURE_DISABLED}
+	{"UPSI-8",		CB_SWITCH_NAME,  CB_SWITCH_8, CB_FEATURE_DISABLED}
 };
 
 #define	SYSTEM_TAB_SIZE	sizeof(system_name_table) / sizeof(struct system_name_struct)
 
 static struct system_name_struct *lookup_system_name (const char *, const int);
 
-/* Reserved word table, note: this list is sorted on startup in
-   (initialize_reserved_words_if_needed), no need to care for EBCDIC */
+/* Reserved word table */
+/* Must be ordered on word for binary search */
 /* Description */
 
-/* Word # Statement has terminator # Is context sensitive (only for printing)
-        # Token # Special context set # Special context test */
+/* Word # Statement has terminator # Is context sensitive # Token */
+/* Special context set # Special context test */
 
 static struct cobc_reserved *reserved_words;
 
 static struct cobc_reserved default_reserved_words[] = {
-  { "3-D",			0, 1, THREEDIMENSIONAL,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ABSENT",			0, 0, ABSENT,			/* IBM RW */
-				0, 0
-  },
   { "ACCEPT",			1, 0, ACCEPT,			/* 2002 */
 				CB_CS_ACCEPT, 0
   },
   { "ACCESS",			0, 0, ACCESS,			/* 2002 */
 				0, 0
   },
-  { "ACTION",		0, 1, ACTION,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "ACTIVE-CLASS",		0, 0, -1,			/* 2002 */
 				0, 0
-  },
-  { "ACTIVE-X",		1, 1, ACTIVEX,		/* ACU extension, very unlikely to be implemented */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
   },
   { "ADD",			1, 0, ADD,			/* 2002 */
 				0, 0
@@ -262,17 +217,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ADDRESS",			0, 0, ADDRESS,			/* 2002 */
 				0, 0
   },
-  { "ADJUSTABLE-COLUMNS",		0, 1, ADJUSTABLE_COLUMNS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "ADVANCING",		0, 0, ADVANCING,		/* 2002 */
 				0, 0
   },
   { "AFTER",			0, 0, AFTER,			/* 2002 */
 				0, 0
-  },
-  { "ALIGNMENT",		0, 1, ALIGNMENT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "ALIGNED",			0, 0, -1,			/* 2002 */
 				0, 0
@@ -334,8 +283,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ARGUMENT-VALUE",		0, 0, ARGUMENT_VALUE,		/* Extension */
 				0, 0
   },
-  { "ARITHMETIC",		0, 1, ARITHMETIC,			/* 2002 (C/S) */
-				0, CB_CS_OPTIONS
+  { "ARITHMETIC",		0, 1, -1,			/* 2002 (C/S) */
+				0, 0
   },
   { "AS",			0, 0, AS,			/* 2002 */
 				0, 0
@@ -346,7 +295,7 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ASCII",			0, 1, ASCII,			/* Extension */
 				0, CB_CS_ALPHABET
   },
-  { "ASSIGN",			1, 0, ASSIGN,			/* 2002 */
+  { "ASSIGN",			0, 0, ASSIGN,			/* 2002 */
 				CB_CS_ASSIGN, 0
   },
   { "AT",			0, 0, AT,			/* 2002 */
@@ -355,18 +304,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ATTRIBUTE",		0, 1, ATTRIBUTE,		/* 2002 (C/S) */
 				0, CB_CS_SET
   },
-  { "AUTO",			0, 1, AUTO,			/* 2002 (C/S), extension */
-				0, CB_CS_ACCEPT | CB_CS_SCREEN | CB_CS_CALL
-  },
-  { "AUTO-DECIMAL",		0, 1, AUTO_DECIMAL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "AUTO-SPIN",		0, 1, AUTO_SPIN,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "AUTO",			0, 0, AUTO,			/* 2002 (C/S) */
+				0, 0
   },
   { "AUTOMATIC",		0, 0, AUTOMATIC,		/* 2002 */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to LOCK MODE clause */
   },
   { "AWAY-FROM-ZERO",		0, 1, AWAY_FROM_ZERO,		/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
@@ -383,8 +325,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "B-XOR",			0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "BACKGROUND-COLOR",		0, 1, BACKGROUND_COLOR,		/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
+  { "BACKGROUND-COLOR",		0, 0, BACKGROUND_COLOR,		/* 2002 (C/S) */
+				0, 0
   },
   { "BACKGROUND-HIGH",		0, 0, BACKGROUND_HIGH,		/* ACU extension */
 				0, 0
@@ -395,17 +337,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "BACKGROUND-STANDARD",		0, 0, BACKGROUND_STANDARD,		/* ACU extension */
 				0, 0
   },
-  { "BAR",			1, 1, BAR,			/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
   { "BASED",			0, 0, BASED,			/* 2002 */
 				0, 0
   },
   { "BEFORE",			0, 0, BEFORE,			/* 2002 */
 				0, 0
   },
-  { "BELL",			0, 1, BELL,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
+  { "BELL",			0, 0, BELL,			/* 2002 (C/S) */
+				0, 0
   },
   { "BINARY",			0, 0, BINARY,			/* 2002 */
 				0, 0
@@ -422,47 +361,17 @@ static struct cobc_reserved default_reserved_words[] = {
   { "BINARY-LONG",		0, 0, BINARY_LONG,		/* 2002 */
 				0, 0
   },
-  { "BINARY-SEQUENTIAL",	0, 0, BINARY_SEQUENTIAL,	/* Extension */
-				0, CB_CS_DELIMITER
-  },
   { "BINARY-SHORT",		0, 0, BINARY_SHORT,		/* 2002 */
 				0, 0
   },
-  { "BIT",			0, 0, BIT,			/* 2002 */
+  { "BIT",			0, 0, -1,			/* 2002 */
 				0, 0
-  },
-  { "BITMAP",		1, 1, BITMAP,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "BITMAP-END",		0, 1, BITMAP_END,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-HANDLE",		0, 1, BITMAP_HANDLE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-NUMBER",		0, 1, BITMAP_NUMBER,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-START",		0, 1, BITMAP_START,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-TIMER",		0, 1, BITMAP_TIMER,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-TRAILING",		0, 1, BITMAP_TRAILING,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-TRANSPARENT-COLOR",		0, 1, BITMAP_TRANSPARENT_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BITMAP-WIDTH",		0, 1, BITMAP_WIDTH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "BLANK",			0, 0, BLANK,			/* 2002 */
 				0, 0
   },
-  { "BLINK",			0, 1, BLINK,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
+  { "BLINK",			0, 0, BLINK,			/* 2002 (C/S) */
+				0, 0
   },
   { "BLOCK",			0, 0, BLOCK,			/* 2002 */
 				0, 0
@@ -479,29 +388,17 @@ static struct cobc_reserved default_reserved_words[] = {
   { "BOXED",		0, 0, BOXED,		/* ACU extension */
 				0, CB_CS_DISPLAY
   },
-  { "BUSY",		0, 1, BUSY,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "BUTTONS",		0, 1, BUTTONS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "BY",			0, 0, BY,			/* 2002 */
 				0, 0
   },
   { "BYTE-LENGTH",		0, 1, BYTE_LENGTH,		/* 2002 (C/S) */
 				0, CB_CS_CONSTANT
   },
-  { "CALENDAR-FONT",		0, 1, CALENDAR_FONT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "CALL",			1, 0, CALL,			/* 2002 */
 				CB_CS_CALL, 0
   },
   { "CANCEL",			0, 0, CANCEL,			/* 2002 */
 				0, 0
-  },
-  { "CANCEL-BUTTON",		0, 1, CANCEL_BUTTON,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "CAPACITY",			0, 1, CAPACITY,			/* 2014 */
 				0, CB_CS_OCCURS
@@ -515,36 +412,12 @@ static struct cobc_reserved default_reserved_words[] = {
   { "CASSETTE",			0, 1, CASSETTE,			/* Extension */
 				0, CB_CS_ASSIGN
   },
-  { "CCOL",		0, 1, CCOL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "CD",			0, 0, CD,			/* Communication Section */
 				0, 0
   },
-  { "CELL",		0, 1, CELL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CELL-COLOR",		0, 1, CELL_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CELL-DATA",		0, 1, CELL_DATA,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CELL-FONT",		0, 1, CELL_FONT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CELL-PROTECTION",		0, 1, CELL_PROTECTION,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CENTER",			0, 1, CENTER,			/* 2002 (C/S) */
+  { "CENTER",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
 	/* FIXME + Check: 2014 Context-sensitive to COLUMN clause */
-  },
-  { "CENTERED-HEADINGS",		0, 1, CENTERED_HEADINGS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CENTURY-DATE",		0, 1, CENTURY_DATE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "CF",			0, 0, CF,			/* 2002 */
 				0, 0
@@ -564,9 +437,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "CHARACTERS",		0, 0, CHARACTERS,		/* 85 (OBJECT-COMPUTER) 2002 */
 				0, 0
   },
-  { "CHECK-BOX",		1, 1, CHECK_BOX,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
   { "CLASS",			0, 0, CLASS,			/* 2002 */
 				0, 0
   },
@@ -575,16 +445,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "CLASSIFICATION",		0, 1, CLASSIFICATION,		/* 2002 (C/S) */
 				0, 0
-	/* FIXME + Check: 2014 Context-sensitive to OBJECT-COMPUTER paragraph */
-  },
-  { "CLEAR-SELECTION",		0, 1, CLEAR_SELECTION,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CLINE",		0, 1, CLINE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CLINES",		0, 1, CLINES,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "CLOSE",			0, 0, CLOSE,			/* 2002 */
 				0, 0
@@ -608,35 +468,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "COLOR",			0, 0, COLOR,			/* Extension */
 				0, 0
   },
-  { "COLORS",		0, 1, COLORS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "COLS",			0, 0, COLS,			/* 2002 */
 				0, 0
   },
   { "COLUMN",			0, 0, COLUMN,			/* 2002 */
 				0, 0
   },
-  { "COLUMN-COLOR",		0, 1, COLUMN_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "COLUMN-DIVIDERS",		0, 1, COLUMN_DIVIDERS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "COLUMN-FONT",		0, 1, COLUMN_FONT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "COLUMN-HEADINGS",		0, 1, COLUMN_HEADINGS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "COLUMN-PROTECTION",		0, 1, COLUMN_PROTECTION,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "COLUMNS",			0, 0, COLUMNS,			/* 2002 */
 				0, 0
-  },
-  { "COMBO-BOX",		1, 1, COMBO_BOX,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
   },
   { "COMMA",			0, 0, COMMA,			/* 2002 */
 				0, 0
@@ -651,11 +490,17 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "COMMUNICATION",		0, 0, COMMUNICATION,		/* Communication Section */
-				0, 0
+	  			0, 0
   },
   { "COMP",			0, 0, COMP,			/* 2002 */
 				0, 0
   },
+	/* Note EBCDIC! */
+#ifdef	COB_EBCDIC_MACHINE
+  { "COMP-X",			0, 0, COMP_X,			/* Extension */
+				0, 0
+  },
+#endif
   { "COMP-1",			0, 0, COMP_1,			/* Extension */
 				0, 0
   },
@@ -674,12 +519,21 @@ static struct cobc_reserved default_reserved_words[] = {
   { "COMP-6",			0, 0, COMP_6,			/* Extension */
 				0, 0
   },
+	/* Note EBCDIC! */
+#ifndef	COB_EBCDIC_MACHINE
   { "COMP-X",			0, 0, COMP_X,			/* Extension */
 				0, 0
   },
+#endif
   { "COMPUTATIONAL",		0, 0, COMP,			/* 2002 */
 				0, 0
   },
+	/* Note EBCDIC! */
+#ifdef	COB_EBCDIC_MACHINE
+  { "COMPUTATIONAL-X",		0, 0, COMP_X,			/* Extension */
+				0, 0
+  },
+#endif
   { "COMPUTATIONAL-1",		0, 0, COMP_1,			/* Extension */
 				0, 0
   },
@@ -698,9 +552,12 @@ static struct cobc_reserved default_reserved_words[] = {
   { "COMPUTATIONAL-6",		0, 0, COMP_6,			/* Extension */
 				0, 0
   },
+	/* Note EBCDIC! */
+#ifndef	COB_EBCDIC_MACHINE
   { "COMPUTATIONAL-X",		0, 0, COMP_X,			/* Extension */
 				0, 0
   },
+#endif
   { "COMPUTE",			1, 0, COMPUTE,			/* 2002 */
 				0, 0
   },
@@ -737,9 +594,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "COPY",			0, 0, COPY,			/* 2002 */
 				0, 0
   },
-  { "COPY-SELECTION",		0, 1, COPY_SELECTION,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "CORR",			0, 0, CORRESPONDING,		/* 2002 */
 				0, 0
   },
@@ -755,59 +609,23 @@ static struct cobc_reserved default_reserved_words[] = {
   { "CRT-UNDER",		0, 0, CRT_UNDER,		/* Extension */
 				0, 0
   },
-  { "CSIZE",		0, 1, CSIZE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "CURRENCY",			0, 0, CURRENCY,			/* 2002 */
 				0, 0
   },
   { "CURSOR",			0, 0, CURSOR,			/* 2002 */
 				0, 0
   },
-  { "CURSOR-COL",		0, 1, CURSOR_COL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CURSOR-COLOR",		0, 1, CURSOR_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CURSOR-FRAME-WIDTH",		0, 1, CURSOR_FRAME_WIDTH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CURSOR-ROW",		0, 1, CURSOR_ROW,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CURSOR-X",		0, 1, CURSOR_X,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CURSOR-Y",		0, 1, CURSOR_Y,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "CUSTOM-PRINT-TEMPLATE",		0, 1, CUSTOM_PRINT_TEMPLATE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "CYCLE",			0, 1, CYCLE,			/* 2002 (C/S) */
 				0, CB_CS_EXIT
-  },
-  { "DASHED",		0, 1, DASHED,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "DATA",			0, 0, DATA,			/* 2002 */
 				0, 0
   },
-  { "DATA-COLUMNS",		0, 1, DATA_COLUMNS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "DATA-POINTER",		0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "DATA-TYPES",		0, 1, DATA_TYPES,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "DATE",			0, 0, DATE,			/* 2002 */
 				CB_CS_DATE, 0
-  },
-  { "DATE-ENTRY",		1, 1, DATE_ENTRY,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
   },
   { "DAY",			0, 0, DAY,			/* 2002 */
 				CB_CS_DAY, 0
@@ -830,9 +648,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "DEFAULT",			0, 0, DEFAULT,			/* 2002 */
 				0, 0
   },
-  { "DEFAULT-BUTTON",		0, 1, DEFAULT_BUTTON,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "DEFAULT-FONT",		0, 0, DEFAULT_FONT,		/* ACU extension */
 				0, 0				/* Checkme: likely context sensitive */
   },
@@ -843,7 +658,7 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "DELIMITER",		0, 0, DELIMITER,		/* 2002 */
-				CB_CS_DELIMITER, 0
+				0, 0
   },
   { "DEPENDING",		0, 0, DEPENDING,		/* 2002 */
 				0, 0
@@ -872,44 +687,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "DISPLAY",			1, 0, DISPLAY,			/* 2002 */
 				0, 0
   },
-  { "DISPLAY-COLUMNS",		0, 1, DISPLAY_COLUMNS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DISPLAY-FORMAT",		0, 1, DISPLAY_FORMAT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "DIVIDE",			1, 0, DIVIDE,			/* 2002 */
 				0, 0
-  },
-  { "DIVIDER-COLOR",		0, 1, DIVIDER_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DIVIDERS",		0, 1, DIVIDERS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "DIVISION",			0, 0, DIVISION,			/* 2002 */
 				0, 0
   },
-  { "DOTDASH",		0, 1, DOTDASH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DOTTED",		0, 1, DOTTED,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DOUBLE",		0, 0, FLOAT_LONG,		/* ACU extension */
-				0, 0
-  },
   { "DOWN",			0, 0, DOWN,			/* 2002 */
 				0, 0
-  },
-  { "DRAG-COLOR",		0, 1, DRAG_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DROP-DOWN",		0, 1, DROP_DOWN,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "DROP-LIST",		0, 1, DROP_LIST,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "DUPLICATES",		0, 0, DUPLICATES,		/* 2002 */
 				0, 0
@@ -953,9 +738,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "END-CHAIN",		0, 0, -1,			/* Extension */
 				0, 0
   },
-  { "END-COLOR",		0, 1, END_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "END-COMPUTE",		0, 0, END_COMPUTE,		/* 2002 */
 				0, 0
   },
@@ -973,9 +755,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "END-IF",			0, 0, END_IF,			/* 2002 */
 				0, 0
-  },
-  { "END-MODIFY",		0, 1, END_MODIFY,		/* ACU extension */
-				0, CB_CS_INQUIRE_MODIFY
   },
   { "END-MULTIPLY",		0, 0, END_MULTIPLY,		/* 2002 */
 				0, 0
@@ -1016,23 +795,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "END-WRITE",		0, 0, END_WRITE,		/* 2002 */
 				0, 0
   },
-  { "ENGRAVED",		0, 1, ENGRAVED,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ENSURE-VISIBLE",		0, 1, ENSURE_VISIBLE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "ENTRY",			0, 0, ENTRY,			/* Extension */
 				0, 0
   },
   { "ENTRY-CONVENTION",		0, 1, ENTRY_CONVENTION,		/* 2002 (C/S) */
 				0, CB_CS_OPTIONS
-  },
-  { "ENTRY-FIELD",		1, 1, ENTRY_FIELD,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "ENTRY-REASON",		0, 1, ENTRY_REASON,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "ENVIRONMENT",		0, 0, ENVIRONMENT,		/* 2002 */
 				0, 0
@@ -1058,8 +825,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "EQUAL",			0, 0, EQUAL,			/* 2002 */
 				0, 0
   },
-  { "ERASE",			0, 1, ERASE,			/* 2002 (C/S) */
-				CB_CS_ERASE, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
+  { "ERASE",			0, 0, ERASE,			/* 2002 (C/S) */
+				CB_CS_ERASE, 0
   },
   { "ERROR",			0, 0, ERROR,			/* 2002 */
 				0, 0
@@ -1067,20 +834,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ESCAPE",			0, 0, ESCAPE,			/* Extension */
 				0, 0
   },
-  { "ESCAPE-BUTTON",		0, 1, ESCAPE_BUTTON,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "ESI",			0, 0, ESI,			/* Communication Section */
 				0, 0
   },
   { "EVALUATE",			1, 0, EVALUATE,			/* 2002 */
 				0, 0
-  },
-  { "EVENT",			1, 0, EVENT,			/* ACU extension */
-				0, 0
-  },
-  { "EVENT-LIST",		0, 1, EVENT_LIST,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "EXCEPTION",		0, 0, EXCEPTION,		/* 2002 */
 				0, 0
@@ -1088,22 +846,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "EXCEPTION-OBJECT",		0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "EXCEPTION-VALUE",		0, 1, EXCEPTION_VALUE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "EXCLUSIVE",		0, 0, EXCLUSIVE,		/* 2002 */
 				0, 0
   },
   { "EXIT",			0, 0, EXIT,			/* 2002 */
 				CB_CS_EXIT, 0
   },
-  { "EXPAND",		0, 1, EXPAND,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "EXPANDS",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to class-specifier and
-	   interface-specifier of REPOSITORY paragraph */
   },
   { "EXTEND",			0, 0, EXTEND,			/* 2002 */
 				0, 0
@@ -1113,9 +863,6 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, CB_CS_CALL | CB_CS_OPTIONS
   },
   { "EXTERNAL",			0, 0, EXTERNAL,			/* 2002 */
-				0, 0
-  },
-  { "EXTERNAL-FORM",			0, 0, EXTERNAL_FORM,			/* ACU CGI extension */
 				0, 0
   },
   { "F",			0, 0, F,			/* Extension */
@@ -1139,29 +886,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "FILE-ID",			0, 0, FILE_ID,			/* Extension */
 				0, 0
   },
-  { "FILE-NAME",		0, 1, FILE_NAME,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FILE-POS",		0, 1, FILE_POS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FILL-COLOR",		0, 1, FILL_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FILL-COLOR2",		0, 1, FILL_COLOR2,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FILL-PERCENT",		0, 1, FILL_PERCENT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "FILLER",			0, 0, FILLER,			/* 2002 */
 				0, 0
   },
   { "FINAL",			0, 0, FINAL,			/* 2002 */
 				0, 0
-  },
-  { "FINISH-REASON",		0, 1, FINISH_REASON,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "FIRST",			0, 0, FIRST,			/* 2002 */
 				0, 0
@@ -1171,18 +900,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "FIXED-FONT",		0, 0, FIXED_FONT,		/* ACU extension */
 				0, 0				/* Checkme: likely context sensitive */
-  },
-  { "FIXED-WIDTH",		0, 1, FIXED_WIDTH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FLAT",		0, 1, FLAT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FLAT-BUTTONS",		0, 1, FLAT_BUTTONS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FLOAT",		0, 0, FLOAT_SHORT,		/* ACU extension */
-				0, 0
   },
   { "FLOAT-BINARY-128",		0, 0, -1,			/* 2014 */
 				0, 0
@@ -1204,8 +921,6 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
 #endif
-  /* note: may be set as alias for FLOAT-LONG to enable compilation,
-           the actual precision seems to be compiler (version) specific */
   { "FLOAT-EXTENDED",		0, 0, -1,			/* 2002 */
 				0, 0
   },
@@ -1225,7 +940,7 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, CB_CS_DISPLAY
   },
   { "FONT",			0, 0, FONT,			/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
+	  			0, 0				/* Checkme: likely context sensitive */
   },
   { "FOOTING",			0, 0, FOOTING,			/* 2002 */
 				0, 0
@@ -1233,8 +948,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "FOR",			0, 0, FOR,			/* 2002 */
 				0, 0
   },
-  { "FOREGROUND-COLOR",		0, 1, FOREGROUND_COLOR,		/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
+  { "FOREGROUND-COLOR",		0, 0, FOREGROUND_COLOR,		/* 2002 (C/S) */
+				0, 0
   },
   { "FOREVER",			0, 1, FOREVER,			/* 2002 (C/S) */
 				0, CB_CS_PERFORM | CB_CS_RETRY
@@ -1242,23 +957,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "FORMAT",			0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "FRAME",		1, 1, FRAME,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "FRAMED",		0, 1, FRAMED,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "FREE",			0, 0, FREE,			/* 2002 */
 				0, 0
   },
   { "FROM",			0, 0, FROM,			/* 2002 */
-				CB_CS_FROM, 0
+				CB_CS_FROM, CB_CS_ACCEPT
   },
-  { "FULL",			0, 1, FULL,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "FULL-HEIGHT",		0, 1, FULL_HEIGHT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "FULL",			0, 0, FULL,			/* 2002 (C/S) */
+				0, 0
   },
   { "FUNCTION",			0, 0, FUNCTION,			/* 2002 */
 				0, 0
@@ -1284,18 +990,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "GO",			0, 0, GO,			/* 2002 */
 				0, 0
   },
-  { "GO-BACK",		0, 1, GO_BACK,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "GO-FORWARD",		0, 1, GO_FORWARD,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "GO-HOME",		0, 1, GO_HOME,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "GO-SEARCH",		0, 1, GO_SEARCH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "GOBACK",			0, 0, GOBACK,			/* 2002 */
 				0, 0
   },
@@ -1305,8 +999,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "GREATER",			0, 0, GREATER,			/* 2002 */
 				0, 0
   },
-  { "GRID",			1, 1, GRID,			/* Extension (ACU control, MF) */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_SCREEN
+  { "GRID",			0, 0, GRID,			/* Extension */
+				0, 0
   },
   { "GROUP",			0, 0, GROUP,			/* 2002 */
 				0, 0
@@ -1314,53 +1008,20 @@ static struct cobc_reserved default_reserved_words[] = {
   { "GROUP-USAGE",		0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "GROUP-VALUE",		0, 1, GROUP_VALUE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "HANDLE",			0, 0, HANDLE,			/* ACU extension */
-				0, 0
-  },
-  { "HAS-CHILDREN",		0, 1, HAS_CHILDREN,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+	  			0, 0
   },
   { "HEADING",			0, 0, HEADING,			/* 2002 */
 				0, 0
   },
-  { "HEADING-COLOR",		0, 1, HEADING_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HEADING-DIVIDER-COLOR",		0, 1, HEADING_DIVIDER_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HEADING-FONT",		0, 1, HEADING_FONT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HEAVY",		0, 1, HEAVY,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HEIGHT-IN-CELLS",		0, 1, HEIGHT_IN_CELLS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HIDDEN-DATA",		0, 1, HIDDEN_DATA,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HIGH-COLOR",		0, 1, HIGH_COLOR,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "HIGH-VALUE",		0, 0, HIGH_VALUE,		/* 2002 */
 				0, 0
   },
-  { "HIGHLIGHT",		0, 1, HIGHLIGHT,		/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
+  { "HIGH-VALUES",		0, 0, HIGH_VALUE,		/* 2002 */
+				0, 0
   },
-  { "HOT-TRACK",		0, 1, HOT_TRACK,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HSCROLL",		0, 1, HSCROLL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "HSCROLL-POS",		0, 1, HSCROLL_POS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "HIGHLIGHT",		0, 0, HIGHLIGHT,		/* 2002 (C/S) */
+				0, 0
   },
   { "I-O",			0, 0, I_O,			/* 2002 */
 				0, 0
@@ -1377,9 +1038,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "IDENTIFICATION",		0, 0, IDENTIFICATION,		/* 2002 */
 				0, 0
   },
-  { "IDENTIFIED",			0, 0, IDENTIFIED,			/* ACU CGI extension */
-				0, 0
-  },
   { "IF",			1, 0, IF,			/* 2002 */
 				0, 0
   },
@@ -1391,7 +1049,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "IMPLEMENTS",		0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to FACTORY and OBJECT paragraph */
   },
   { "IN",			0, 0, IN,			/* 2002 */
 				0, 0
@@ -1429,15 +1086,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "INPUT-OUTPUT",		0, 0, INPUT_OUTPUT,		/* 2002 */
 				0, 0
   },
-  { "INQUIRE",			1, 0, INQUIRE,			/* ACU extension */
-				CB_CS_INQUIRE_MODIFY, 0
-  },
-  { "INSERTION-INDEX",			0, 1, INSERTION_INDEX,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "INSERT-ROWS",			0, 1, INSERT_ROWS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "INSPECT",			0, 0, INSPECT,			/* 2002 */
 				0, 0
   },
@@ -1455,7 +1103,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "INTRINSIC",		0, 1, INTRINSIC,		/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to function-specifier of the REPOSITORY paragraph */
   },
   { "INVALID",			0, 0, INVALID,			/* 2002 */
 				0, 0
@@ -1465,24 +1112,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "IS",			0, 0, IS,			/* 2002 */
 				0, 0
-  },
-  { "ITEM",			0, 1, ITEM,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ITEM-TEXT",			0, 1, ITEM_TEXT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ITEM-TO-ADD",			0, 1, ITEM_TO_ADD,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ITEM-TO-DELETE",			0, 1, ITEM_TO_DELETE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ITEM-TO-EMPTY",			0, 1, ITEM_TO_EMPTY,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ITEM-VALUE",			0, 1, ITEM_VALUE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "JUST",			0, 0, JUSTIFIED,		/* 2002 */
 				0, 0
@@ -1499,65 +1128,47 @@ static struct cobc_reserved default_reserved_words[] = {
   { "KEYBOARD",			0, 1, KEYBOARD,			/* Extension */
 				0, CB_CS_ASSIGN
   },
-  { "LABEL",			0, 0, LABEL,			/* 85, ACU extension */
+  { "LABEL",			0, 0, LABEL,			/* 85 */
 				0, 0
   },
-  { "LABEL-OFFSET",			0, 1, LABEL_OFFSET,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "LARGE-FONT",		0, 0, LARGE_FONT,		/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
-  },
-  { "LARGE-OFFSET",			0, 1, LARGE_OFFSET,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+	  			0, 0				/* Checkme: likely context sensitive */
   },
   { "LAST",			0, 0, LAST,			/* 2002 */
 				0, 0
   },
-  { "LAST-ROW",			0, 1, LAST_ROW,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "LAYOUT-DATA",		0, 1, LAYOUT_DATA,		/* ACU extension */
-				0, CB_CS_INQUIRE_MODIFY	/* likely wrong context, fix later */
-  },
   { "LAYOUT-MANAGER",		0, 0, LAYOUT_MANAGER,		/* ACU extension */
-				0, 0				/* Check me: likely context sensitive */
+	  			0, 0				/* Check me: likely context sensitive */
   },
   { "LC_ALL",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_COLLATE",		0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_CTYPE",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_MESSAGES",		0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_MONETARY",		0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_NUMERIC",		0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LC_TIME",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_SET
+				0, 0
   },
   { "LEADING",			0, 0, LEADING,			/* 2002 */
 				0, 0
-  },
-  { "LEADING-SHIFT",			0, 1, LEADING_SHIFT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "LEFT",			0, 0, LEFT,			/* 2002 */
 				0, 0
   },
   { "LEFT-JUSTIFY",		0, 0, -1,			/* Extension */
 				0, 0
-  },
-  { "LEFT-TEXT",			0, 1, LEFT_TEXT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "LEFTLINE",			0, 0, LEFTLINE,			/* Extension */
 				0, 0
@@ -1586,20 +1197,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "LINE-COUNTER",		0, 0, LINE_COUNTER,		/* 2002 */
 				0, 0
   },
-  { "LINE-SEQUENTIAL",		0, 0, LINE_SEQUENTIAL,		/* Extension */
-				0, CB_CS_DELIMITER
-  },
   { "LINES",			0, 0, LINES,			/* 2002 */
 				0, 0
   },
-  { "LINES-AT-ROOT",			0, 1, LINES_AT_ROOT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "LINKAGE",			0, 0, LINKAGE,			/* 2002 */
 				0, 0
-  },
-  { "LIST-BOX",		1, 1, LIST_BOX,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
   },
   { "LM-RESIZE",		0, 0, LM_RESIZE,		/* ACU extension */
 				0, 0				/* Checkme: likely context sensitive */
@@ -1613,48 +1215,26 @@ static struct cobc_reserved default_reserved_words[] = {
   { "LOCK",			0, 0, LOCK,			/* 2002 */
 				0, 0
   },
-  { "LONG-DATE",			0, 1, LONG_DATE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "LOW-COLOR",			0, 1, LOW_COLOR,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "LOW-VALUE",		0, 0, LOW_VALUE,		/* 2002 */
+				0, 0
+  },
+  { "LOW-VALUES",		0, 0, LOW_VALUE,		/* 2002 */
 				0, 0
   },
   { "LOWER",			0, 1, LOWER,			/* Extension */
 				0, CB_CS_ACCEPT
   },
-  { "LOWERED",			0, 1, LOWERED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "LOWLIGHT",			0, 1, LOWLIGHT,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
+  { "LOWLIGHT",			0, 0, LOWLIGHT,			/* 2002 (C/S) */
+				0, 0
   },
   { "MAGNETIC-TAPE",		0, 1, MAGNETIC_TAPE,		/* Extension */
 				0, CB_CS_ASSIGN
   },
   { "MANUAL",			0, 0, MANUAL,			/* 2002 */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to LOCK MODE clause */
-  },
-  { "MASS-UPDATE",		0, 1, MASS_UPDATE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "MAX-LINES",		0, 1, MAX_LINES,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "MAX-PROGRESS",		0, 1, MAX_PROGRESS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "MAX-TEXT",		0, 1, MAX_TEXT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "MAX-VAL",		0, 1, MAX_VAL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "MEDIUM-FONT",		0, 0, MEDIUM_FONT,		/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
+		  		0, 0				/* Checkme: likely context sensitive */
   },
   { "MEMORY",			0, 1, MEMORY,			/* 85 */
 				0, CB_CS_OBJECT_COMPUTER
@@ -1674,17 +1254,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "METHOD-ID",		0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "MIN-VAL",		0, 1, MIN_VAL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "MINUS",			0, 0, MINUS,			/* 2002 */
 				0, 0
   },
   { "MODE",			0, 0, MODE,			/* 2002 */
 				0, 0
-  },
-  { "MODIFY",			1, 0, MODIFY,			/* ACU extension */
-				CB_CS_INQUIRE_MODIFY, 0
   },
   { "MODULES",			0, 0, MODULES,			/* 85 */
 				0, CB_CS_OBJECT_COMPUTER
@@ -1692,12 +1266,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "MOVE",			0, 0, MOVE,			/* 2002 */
 				0, 0
   },
-  { "MULTILINE",		0, 1, MULTILINE,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "MULTIPLE",			0, 0, MULTIPLE,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to LOCK ON phrase */
   },
   { "MULTIPLY",			1, 0, MULTIPLY,			/* 2002 */
 				0, 0
@@ -1714,20 +1284,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "NATIVE",			0, 0, NATIVE,			/* 2002 */
 				0, 0
   },
-  { "NAVIGATE-URL",		0, 1, NAVIGATE_URL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "NEAREST-AWAY-FROM-ZERO",	0, 1, NEAREST_AWAY_FROM_ZERO,	/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
-	/* FIXME: 2014 ... and INTERMEDIATE ROUNDING clause  */
   },
   { "NEAREST-EVEN",		0, 1, NEAREST_EVEN,		/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
-	/* FIXME: 2014 ... and INTERMEDIATE ROUNDING clause  */
   },
   { "NEAREST-TOWARD-ZERO",	0, 1, NEAREST_TOWARD_ZERO,	/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
-	/* FIXME: 2014 ... and INTERMEDIATE ROUNDING clause  */
   },
   { "NEGATIVE",			0, 0, NEGATIVE,			/* 2002 */
 				0, 0
@@ -1735,50 +1299,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "NESTED",			0, 0, NESTED,			/* 2002 */
 				0, 0
   },
-  { "NEW",			0, 0, NEW,			/* 2002 */
-				0, 0
-  },
   { "NEXT",			0, 0, NEXT,			/* 2002 */
 				0, 0
-  },
-  { "NEXT-ITEM",		0, 1, NEXT_ITEM,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "NO",			0, 0, NO,			/* 2002 */
 				0, 0
   },
-  { "NO-AUTOSEL",			0, 1, NO_AUTOSEL,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-AUTO-DEFAULT",			0, 1, NO_AUTO_DEFAULT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-BOX",			0, 1, NO_BOX,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-DIVIDERS",			0, 1, NO_DIVIDERS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "NO-ECHO",			0, 0, NO_ECHO,			/* Extension */
 				0, 0
-  },
-  { "NO-F4",			0, 1, NO_F4,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-FOCUS",			0, 1, NO_FOCUS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-GROUP-TAB",			0, 1, NO_GROUP_TAB,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-KEY-LETTER",			0, 1, NO_KEY_LETTER,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-SEARCH",			0, 1, NO_SEARCH,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NO-UPDOWN",			0, 1, NO_UPDOWN,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "NONE",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
@@ -1789,23 +1317,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "NOT",			0, 0, NOT,			/* 2002 */
 				0, 0
   },
-  { "NOTAB",			0, 1, NOTAB,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "NOTHING",			0, 0, NOTHING,			/* Extension */
 				0, 0
-  },
-  { "NOTIFY",			0, 1, NOTIFY,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NOTIFY-CHANGE",			0, 1, NOTIFY_CHANGE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NOTIFY-DBLCLICK",			0, 1, NOTIFY_DBLCLICK,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NOTIFY-SELCHANGE",			0, 1, NOTIFY_SELCHANGE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "NULL",			0, 0, TOK_NULL,			/* 2002 */
 				0, 0
@@ -1813,18 +1326,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "NULLS",			0, 0, TOK_NULL,			/* Extension */
 				0, 0
   },
-  { "NUM-COL-HEADINGS",			0, 1, NUM_COL_HEADINGS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "NUM-ROWS",			0, 1, NUM_ROWS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "NUMBER",			0, 0, NUMBER,			/* 2002 */
 				0, 0
   },
   { "NUMBERS",			0, 0, NUMBERS,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to LINE and COLUMN clause */
   },
   { "NUMERIC",			0, 0, NUMERIC,			/* 2002 */
 				0, 0
@@ -1832,7 +1338,7 @@ static struct cobc_reserved default_reserved_words[] = {
   { "NUMERIC-EDITED",		0, 0, NUMERIC_EDITED,		/* 2002 */
 				0, 0
   },
-  { "OBJECT",			0, 0, OBJECT,			/* 2002, ACU extension */
+  { "OBJECT",			0, 0, -1,			/* 2002 */
 				0, 0
   },
   { "OBJECT-COMPUTER",		0, 0, OBJECT_COMPUTER,		/* 2002 */
@@ -1850,9 +1356,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "OFF",			0, 0, OFF,			/* 2002 */
 				0, 0
   },
-  { "OK-BUTTON",			0, 1, OK_BUTTON,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "OMITTED",			0, 0, OMITTED,			/* 2002 */
 				0, 0
   },
@@ -1861,7 +1364,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "ONLY",			0, 0, ONLY,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to Object-view, SHARING clause, SHARING phrase, and USAGE clause */
   },
   { "OPEN",			0, 0, OPEN,			/* 2002 */
 				0, 0
@@ -1890,12 +1392,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "OVERFLOW",			0, 0, TOK_OVERFLOW,		/* 2002 */
 				0, 0
   },
-  { "OVERLAP-LEFT",			0, 1, OVERLAP_LEFT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "OVERLAP-TOP",			0, 1, OVERLAP_LEFT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "OVERLINE",			0, 0, OVERLINE,			/* Extension */
 				0, 0
   },
@@ -1914,26 +1410,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "PAGE-COUNTER",		0, 0, PAGE_COUNTER,		/* 2002 */
 				0, 0
   },
-  { "PAGE-SETUP",			0, 1, PAGE_SETUP,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "PAGED",			0, 1, PAGED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "PARAGRAPH",		0, 1, PARAGRAPH,		/* 2002 (C/S) */
 				0, CB_CS_EXIT
   },
-  { "PARENT",			0, 1, PARENT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "PASSWORD",			0, 1, PASSWORD,			/* IBM extension */
-				0, CB_CS_SELECT
-  },
   { "PERFORM",			1, 0, PERFORM,			/* 2002 */
 				CB_CS_PERFORM, 0
-  },
-  { "PERMANENT",			0, 1, PERMANENT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "PF",			0, 0, PF,			/* 2002 */
 				0, 0
@@ -1941,21 +1422,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "PH",			0, 0, PH,			/* 2002 */
 				0, 0
   },
-  { "PHYSICAL",			0, 0, PHYSICAL,			/* 2014, note:
-	only listed as argument for LENGTH FUNCTIONS...  */
-				0, 0
-  },
   { "PIC",			0, 0, PICTURE,			/* 2002 */
 				0, 0
   },
   { "PICTURE",			0, 0, PICTURE,			/* 2002 */
 				0, 0
-  },
-  { "PIXEL",		0, 1, PIXEL,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "PLACEMENT",			0, 1, PLACEMENT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "PLUS",			0, 0, PLUS,			/* 2002 */
 				0, 0
@@ -1969,9 +1440,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "POSITION",			0, 0, POSITION,			/* 85 */
 				0, 0
   },
-  { "POSITION-SHIFT",			0, 1, POSITION_SHIFT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "POSITIVE",			0, 0, POSITIVE,			/* 2002 */
 				0, 0
   },
@@ -1983,16 +1451,10 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "PREVIOUS",			0, 0, PREVIOUS,			/* 2002 (C/S) */
-				0, CB_CS_READ
+				0, 0
   },
   { "PRINT",			0, 1, PRINT,			/* Extension */
 				0, CB_CS_ASSIGN
-  },
-  { "PRINT-NO-PROMPT",			0, 1, PRINT_NO_PROMPT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "PRINT-PREVIEW",			0, 1, PRINT_PREVIEW,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "PRINTER",			0, 1, PRINTER,			/* Extension */
 				0, CB_CS_ASSIGN
@@ -2004,7 +1466,7 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "PRIORITY",			0, 0, PRIORITY,			/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
+	  			0, 0				/* Checkme: likely context sensitive */
   },
   { "PROCEDURE",		0, 0, PROCEDURE,		/* 2002 */
 				0, 0
@@ -2027,20 +1489,13 @@ static struct cobc_reserved default_reserved_words[] = {
   { "PROGRAM-POINTER",		0, 0, PROGRAM_POINTER,		/* 2002 */
 				0, 0
   },
-  { "PROGRESS",			0, 1, PROGRESS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "PROHIBITED",		0, 1, PROHIBITED,		/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
-	/* FIXME: 2014 ... and INTERMEDIATE ROUNDING clause clause */
   },
   { "PROMPT",			0, 0, PROMPT,			/* Extension */
 				0, 0
   },
-  { "PROPERTIES",			0, 1, PROPERTIES,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "PROPERTY",			0, 0, PROPERTY,			/* 2002, ACU extension */
+  { "PROPERTY",			0, 0, -1,			/* 2002 */
 				0, 0
   },
   { "PROTECTED",		0, 0, PROTECTED,		/* Extension PROTECTED SIZE */
@@ -2052,12 +1507,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "PURGE",			0, 0, PURGE,			/* Communication Section */
 				0, 0
   },
-  { "PUSH-BUTTON",		1, 1, PUSH_BUTTON,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "QUERY-INDEX",			0, 1, QUERY_INDEX,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "QUEUE",			0, 0, QUEUE,			/* Communication Section */
 				0, 0
   },
@@ -2067,14 +1516,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "QUOTES",			0, 0, QUOTE,			/* 2002 */
 				0, 0
   },
-  { "RADIO-BUTTON",		1, 1, RADIO_BUTTON,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
   { "RAISE",			0, 0, -1,			/* 2002 */
 				0, 0
-  },
-  { "RAISED",			0, 1, RAISED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "RAISING",			0, 0, -1,			/* 2002 */
 				0, 0
@@ -2088,23 +1531,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "READ",			1, 0, READ,			/* 2002 */
 				CB_CS_READ, 0
   },
-  { "READ-ONLY",			0, 1, READ_ONLY,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "RECEIVE",			1, 0, RECEIVE,			/* Communication Section */
 				0, 0
   },
   { "RECORD",			0, 0, RECORD,			/* 2002 */
 				0, 0
-  },
-  { "RECORD-DATA",			0, 1, RECORD_DATA,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "RECORD-TO-ADD",			0, 1, RECORD_TO_ADD,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "RECORD-TO-DELETE",			0, 1, RECORD_TO_DELETE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "RECORDING",		0, 0, RECORDING,		/* Extension */
 				CB_CS_RECORDING, 0
@@ -2127,15 +1558,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "REFERENCES",		0, 0, REFERENCES,		/* Obsolete */
 				0, 0
   },
-  { "REFRESH",			0, 1, REFRESH,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "REGION-COLOR",			0, 1, REGION_COLOR,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "RELATION",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to VALIDATE-STATUS clause */
   },
   { "RELATIVE",			0, 0, RELATIVE,			/* 2002 */
 				0, 0
@@ -2170,23 +1594,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "REPOSITORY",		0, 0, REPOSITORY,		/* 2002 */
 				0, 0
   },
-  { "REQUIRED",			0, 1, REQUIRED,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_SCREEN
+  { "REQUIRED",			0, 0, REQUIRED,			/* 2002 (C/S) */
+				0, 0
   },
   { "RESERVE",			0, 0, RESERVE,			/* 2002 */
 				0, 0
   },
   { "RESET",			0, 0, RESET,			/* 2002 */
 				0, 0
-  },
-  { "RESET-GRID",			0, 1, RESET_GRID,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "RESET-LIST",			0, 1, RESET_LIST,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "RESET-TABS",			0, 1, RESET_TABS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "RESUME",			0, 0, -1,			/* 2002 */
 				0, 0
@@ -2203,8 +1618,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "REVERSE",			0, 0, REVERSE,			/* Extension */
 				0, 0
   },
-  { "REVERSE-VIDEO",		0, 1, REVERSE_VIDEO,		/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
+  { "REVERSE-VIDEO",		0, 0, REVERSE_VIDEO,		/* 2002 (C/S) */
+				0, 0
   },
   { "REVERSED",			0, 0, REVERSED,			/* Obsolete */
 				0, 0
@@ -2224,14 +1639,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "RIGHT",			0, 0, RIGHT,			/* 2002 */
 				0, 0
   },
-  { "RIGHT-ALIGN",			0, 1, RIGHT_ALIGN,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "RIGHT-JUSTIFY",		0, 0, -1,			/* Extension */
 				0, 0
-  },
-  { "RIMMED",			0, 1, RIMMED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "ROLLBACK",			0, 0, ROLLBACK,			/* Extension */
 				0, 0
@@ -2242,24 +1651,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ROUNDING",			0, 1, ROUNDING,			/* 2002 (C/S) */
 				0, CB_CS_OPTIONS
   },
-  { "ROW-COLOR",			0, 1, ROW_COLOR,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ROW-COLOR-PATTERN",			0, 1, ROW_COLOR_PATTERN,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ROW-DIVIDERS",			0, 1, ROW_DIVIDERS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ROW-FONT",			0, 1, ROW_FONT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ROW-HEADINGS",			0, 1, ROW_HEADINGS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "ROW-PROTECTION",			0, 1, ROW_PROTECTION,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "RUN",			0, 0, RUN,			/* 2002 */
 				0, 0
   },
@@ -2269,20 +1660,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SAME",			0, 0, SAME,			/* 2002 */
 				0, 0
   },
-  { "SAVE-AS",			0, 1, SAVE_AS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SAVE-AS-NO-PROMPT",			0, 1, SAVE_AS_NO_PROMPT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "SCREEN",			0, 0, SCREEN,			/* 2002 */
 				0, 0
   },
   { "SCROLL",			0, 1, SCROLL,			/* Extension */
 				0, CB_CS_ACCEPT | CB_CS_DISPLAY
-  },
-  { "SCROLL-BAR",			1, 1, SCROLL_BAR,			/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
   },
   { "SD",			0, 0, SD,			/* 2002 */
 				0, 0
@@ -2290,20 +1672,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SEARCH",			1, 0, SEARCH,			/* 2002 */
 				0, 0
   },
-  { "SEARCH-OPTIONS",			0, 1, SEARCH_OPTIONS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SEARCH-TEXT",			0, 1, SEARCH_TEXT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "SECONDS",			0, 1, SECONDS,			/* 2002 (C/S) */
 				0, CB_CS_RETRY
   },
   { "SECTION",			0, 0, SECTION,			/* 2002 */
 				0, 0
   },
-  { "SECURE",			0, 1, SECURE,			/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
+  { "SECURE",			0, 0, SECURE,			/* 2002 (C/S) */
+				0, 0
   },
   { "SEGMENT",			0, 0, SEGMENT,			/* Communication Section */
 				0, 0
@@ -2311,23 +1687,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SEGMENT-LIMIT",		0, 0, SEGMENT_LIMIT,		/* 85 */
 				0, 0
   },
-  { "SELECT",			1, 0, SELECT,			/* 2002 */
-				CB_CS_SELECT, 0
-  },
-  { "SELECT-ALL",			0, 1, SELECT_ALL,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SELECTION-INDEX",			0, 1, SELECTION_INDEX,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SELECTION-TEXT",			0, 1, SELECTION_TEXT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "SELECT",			0, 0, SELECT,			/* 2002 */
+				0, 0
   },
   { "SELF",			0, 0, -1,			/* 2002 */
 				0, 0
-  },
-  { "SELF-ACT",			0, 1, SELF_ACT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "SEND",			0, 0, SEND,			/* Communication Section */
 				0, 0
@@ -2338,9 +1702,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SEPARATE",			0, 0, SEPARATE,			/* 2002 */
 				0, 0
   },
-  { "SEPARATION",			0, 1, SEPARATION,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "SEQUENCE",			0, 0, SEQUENCE,			/* 2002 */
 				0, 0
   },
@@ -2349,9 +1710,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "SET",			0, 0, SET,			/* 2002 */
 				0, 0
-  },
-  { "SHADING",			0, 1, SHADING,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "SHADOW",		0, 0, SHADOW,		/* ACU extension */
 				0, CB_CS_DISPLAY
@@ -2364,18 +1722,6 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
 #endif
-  { "SHORT-DATE",			0, 1, SHORT_DATE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SHOW-LINES",			0, 1, SHOW_LINES,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SHOW-NONE",			0, 1, SHOW_NONE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SHOW-SEL-ALWAYS",			0, 1, SHOW_SEL_ALWAYS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "SIGN",			0, 0, SIGN,			/* 2002 */
 				0, 0
   },
@@ -2397,16 +1743,13 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "SMALL-FONT",		0, 0, SMALL_FONT,		/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
+	  			0, 0				/* Checkme: likely context sensitive */
   },
   { "SORT",			0, 0, SORT,			/* 2002 */
 				0, 0
   },
   { "SORT-MERGE",		0, 0, SORT_MERGE,		/* 2002 */
 				0, 0
-  },
-  { "SORT-ORDER",			0, 1, SORT_ORDER,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "SOURCE",			0, 0, SOURCE,			/* 2002 */
 				0, 0
@@ -2429,60 +1772,51 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SPECIAL-NAMES",		0, 0, SPECIAL_NAMES,		/* 2002 */
 				0, 0
   },
-  { "SPINNER",			0, 1, SPINNER,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "SQUARE",			0, 1, SQUARE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "STANDARD",			0, 0, STANDARD,			/* 2002 */
 				0, 0
   },
+	/* Note EBCDIC! */
+#ifdef	COB_EBCDIC_MACHINE
+	/* FIXME: 2014 Both are Context-sensitive to ARITHMETIC clause */
+  { "STANDARD-BINARY",		0, 1, -1,			/* 2014 (C/S) */
+				0, 0
+  },
+  { "STANDARD-DECIMAL",		0, 1, -1,			/* 2014 (C/S) */
+				0, 0
+  },
+#endif
   { "STANDARD-1",		0, 0, STANDARD_1,		/* 2002 */
 				0, 0
   },
   { "STANDARD-2",		0, 0, STANDARD_2,		/* 2002 */
 				0, 0
   },
-  { "STANDARD-BINARY",		0, 1, STANDARD_BINARY,			/* 2014 (C/S) */
-				0, CB_CS_OPTIONS
+	/* Note EBCDIC! */
+#ifndef	COB_EBCDIC_MACHINE
+  { "STANDARD-BINARY",		0, 1, -1,			/* 2014 (C/S) */
+				0, 0
   },
-  { "STANDARD-DECIMAL",		0, 1, STANDARD_DECIMAL,			/* 2014 (C/S) */
-				0, CB_CS_OPTIONS
+  { "STANDARD-DECIMAL",		0, 1, -1,			/* 2014 (C/S) */
+				0, 0
   },
+#endif
   { "START",			1, 0, START,			/* 2002 */
 				0, 0
   },
-  { "START-X",			0, 1, START_X,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "START-Y",			0, 1, START_Y,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "STATEMENT",		0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to RESUME statement */
   },
   { "STATIC",			0, 1, STATIC,			/* Extension: implicit defined CALL-CONVENTION */
 				0, CB_CS_CALL
   },
-  { "STATIC-LIST",			0, 1, STATIC_LIST,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "STATUS",			0, 0, STATUS,			/* 2002 */
 				0, 0
-  },
-  { "STATUS-BAR",			1, 1, STATUS_BAR,			/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "STATUS-TEXT",			0, 1, STATUS_TEXT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "STDCALL",			0, 1, STDCALL,			/* Extension: implicit defined CALL-CONVENTION */
 				0, CB_CS_CALL | CB_CS_OPTIONS
   },
   { "STEP",			0, 0, STEP,			/* 2002 (C/S) */
-				0, CB_CS_OCCURS
+				0, 0
   },
   { "STOP",			0, 0, STOP,			/* 2002 */
 				CB_CS_STOP, 0
@@ -2492,10 +1826,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "STRONG",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to TYPEDEF clause */
-  },
-  { "STYLE",			0, 1, STYLE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "SUB-QUEUE-1",		0, 0, SUB_QUEUE_1,		/* Communication Section */
 				0, 0
@@ -2510,7 +1840,7 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "SUBWINDOW",		0, 0, SUBWINDOW,		/* ACU extension */
-				0, 0				/* Checkme: likely context sensitive */
+	  			0, 0				/* Checkme: likely context sensitive */
   },
   { "SUM",			0, 0, SUM,			/* 2002 */
 				0, 0
@@ -2523,7 +1853,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "SYMBOL",			0, 1, -1,			/* 2002 (C/S) */
 				0, 0
-	/* FIXME: 2014 Context-sensitive to CURRENCY clause */
   },
   { "SYMBOLIC",			0, 0, SYMBOLIC,			/* 2002 */
 				0, 0
@@ -2540,14 +1869,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "SYSTEM-OFFSET",		0, 0, SYSTEM_OFFSET,		/* Extension */
 				0, 0
   },
-  { "TAB",			1, 1, TAB,			/* Extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN
-  },
-  { "TAB-TO-ADD",			0, 1, TAB_TO_ADD,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "TAB-TO-DELETE",			0, 1, TAB_TO_DELETE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "TAB",			0, 1, TAB,			/* Extension */
+				0, CB_CS_ACCEPT
   },
   { "TABLE",			0, 0, TABLE,			/* Communication Section */
 				0, 0
@@ -2558,17 +1881,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "TAPE",			0, 1, TAPE,			/* 85 */
 				0, CB_CS_ASSIGN
   },
-  { "TEMPORARY",			0, 1, TEMPORARY,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "TERMINAL",			0, 0, TERMINAL,			/* Communication Section */
 				0, 0
   },
   { "TERMINATE",		0, 0, TERMINATE,		/* 2002 */
 				0, 0
-  },
-  { "TERMINATION-VALUE",			0, 1, TERMINATION_VALUE,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "TEST",			0, 0, TEST,			/* 2002 */
 				0, 0
@@ -2594,12 +1911,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "THRU",			0, 0, THRU,			/* 2002 */
 				0, 0
   },
-  { "THUMB-POSITION",			0, 1, THUMB_POSITION,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "TILED-HEADINGS",			0, 1, TILED_HEADINGS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "TIME",			0, 0, TIME,			/* 2002 */
 				0, 0
   },
@@ -2609,11 +1920,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "TIMES",			0, 0, TIMES,			/* 2002 */
 				0, 0
   },
-  { "TITLE",			0, 1, TITLE,			/* ACU extension */
-				0, CB_CS_DISPLAY | CB_CS_INQUIRE_MODIFY
-  },
-  { "TITLE-POSITION",			0, 1, TITLE_POSITION,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "TITLE",			0, 0, TITLE,			/* ACU extension */
+				0, CB_CS_DISPLAY
   },
   { "TO",			0, 0, TO,			/* 2002 */
 				0, 0
@@ -2633,27 +1941,17 @@ static struct cobc_reserved default_reserved_words[] = {
   { "TRAILING",			0, 0, TRAILING,			/* 2002 */
 				0, 0
   },
-  { "TRAILING-SHIFT",		0, 1, TRAILING_SHIFT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "TRAILING-SIGN",		0, 0, -1,			/* Extension */
 				0, 0
   },
   { "TRANSFORM",		0, 0, TRANSFORM,		/* OSVS */
 				0, 0
   },
-  { "TRANSPARENT",		0, 1, TRANSPARENT,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "TREE-VIEW",		1, 1, TREE_VIEW,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
   { "TRUE",			0, 0, TOK_TRUE,			/* 2002 */
 				0, 0
   },
   { "TRUNCATION",		0, 1, TRUNCATION,		/* 2014 (C/S) */
 				0, CB_CS_ROUNDED
-	/* FIXME: 2014 ... and INTERMEDIATE ROUNDING phrase */
   },
   { "TYPE",			0, 0, TYPE,			/* 2002 */
 				0, 0
@@ -2665,16 +1963,13 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, CB_CS_RECORDING
   },
   { "UCS-4",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_ALPHABET
+				0, 0
   },
   { "UNBOUNDED",		0, 1, UNBOUNDED,			/* IBM V5 */
 				0, CB_CS_OCCURS
   },
-  { "UNDERLINE",		0, 1, UNDERLINE,		/* 2002 (C/S) */
-				0, CB_CS_ACCEPT | CB_CS_DISPLAY | CB_CS_SCREEN | CB_CS_SET
-  },
-  { "UNFRAMED",			0, 1, UNFRAMED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "UNDERLINE",		0, 0, UNDERLINE,		/* 2002 (C/S) */
+				0, 0
   },
   { "UNIT",			0, 0, UNIT,			/* 2002 */
 				0, 0
@@ -2696,9 +1991,6 @@ static struct cobc_reserved default_reserved_words[] = {
   },
   { "UNSIGNED-SHORT",		0, 0, UNSIGNED_SHORT,		/* Extension */
 				0, 0
-  },
-  { "UNSORTED",			0, 1, UNSORTED,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "UNSTRING",			1, 0, UNSTRING,			/* 2002 */
 				0, 0
@@ -2724,15 +2016,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "USE",			0, 0, USE,			/* 2002 */
 				0, 0
   },
-  { "USE-ALT",			0, 1, USE_ALT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "USE-RETURN",			0, 1, USE_RETURN,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "USE-TAB",			0, 1, USE_TAB,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "USER",			0, 1, USER,			/* Extension */
 				0, CB_CS_FROM
   },
@@ -2743,10 +2026,10 @@ static struct cobc_reserved default_reserved_words[] = {
 				0, 0
   },
   { "UTF-16",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_ALPHABET
+				0, 0
   },
   { "UTF-8",			0, 1, -1,			/* 2002 (C/S) */
-				0, CB_CS_ALPHABET
+				0, 0
   },
   { "V",			0, 0, V,			/* Extension */
 				0, CB_CS_RECORDING
@@ -2757,7 +2040,7 @@ static struct cobc_reserved default_reserved_words[] = {
   { "VALID",			0, 0, -1,			/* 2002 */
 				0, 0
   },
-  { "VALIDATE",			0, 0, VALIDATE,			/* 2002 */
+  { "VALIDATE",			0, 0, -1,			/* 2002 */
 				0, 0
   },
   { "VALIDATE-STATUS",		0, 0, -1,			/* 2002 */
@@ -2766,8 +2049,8 @@ static struct cobc_reserved default_reserved_words[] = {
   { "VALUE",			0, 0, VALUE,			/* 2002 */
 				0, 0
   },
-  { "VALUE-FORMAT",			0, 1, VALUE_FORMAT,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
+  { "VALUES",			0, 0, VALUE,			/* 2002 */
+				0, 0
   },
   { "VARIABLE",			0, 0, VARIABLE,			/* Extension */
 				0, CB_CS_RECORDING
@@ -2778,44 +2061,11 @@ static struct cobc_reserved default_reserved_words[] = {
   { "VARYING",			0, 0, VARYING,			/* 2002 */
 				0, 0
   },
-  { "VERTICAL",			0, 1, VERTICAL,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VERY-HEAVY",			0, 1, VERY_HEAVY,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VIRTUAL-WIDTH",			0, 1, VIRTUAL_WIDTH,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VPADDING",			0, 1, VPADDING,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VSCROLL",			0, 1, VSCROLL,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VSCROLL-BAR",			0, 1, VSCROLL_BAR,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VSCROLL-POS",			0, 1, VSCROLL_POS,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "VTOP",			0, 1, VTOP,			/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "WAIT",			0, 0, WAIT,			/* Extension */
 				0, 0
   },
-  { "WEB-BROWSER",		1, 1, WEB_BROWSER,		/* ACU extension */
-				CB_CS_GRAPHICAL_CONTROL, CB_CS_DISPLAY | CB_CS_SCREEN
-  },
   { "WHEN",			0, 0, WHEN,			/* 2002 */
 				0, 0
-  },
-  { "WIDTH",		0, 1, WIDTH,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "WIDTH-IN-CELLS",		0, 1, WIDTH_IN_CELLS,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
   },
   { "WINDOW",			0, 0, WINDOW,			/* ACU extension */
 				0, 0
@@ -2835,12 +2085,6 @@ static struct cobc_reserved default_reserved_words[] = {
   { "WRITE",			1, 0, WRITE,			/* 2002 */
 				0, 0
   },
-  { "X",		0, 1, X,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
-  { "Y",		0, 1, Y,		/* ACU extension */
-				0, CB_CS_GRAPHICAL_CONTROL | CB_CS_INQUIRE_MODIFY
-  },
   { "YYYYDDD",			0, 1, YYYYDDD,			/* 2002 (C/S) */
 				0, CB_CS_DAY
   },
@@ -2850,8 +2094,14 @@ static struct cobc_reserved default_reserved_words[] = {
   { "ZERO",			0, 0, ZERO,			/* 2002 */
 				0, 0
   },
-  { "ZERO-FILL",		0, 1, -1,			/* Extension */
-				0, CB_CS_SCREEN
+  { "ZERO-FILL",		0, 0, -1,			/* Extension */
+				0, 0
+  },
+  { "ZEROES",			0, 0, ZERO,			/* 2002 */
+				0, 0
+  },
+  { "ZEROS",			0, 0, ZERO,			/* 2002 */
+				0, 0
   }
 };
 
@@ -2863,7 +2113,7 @@ struct amendment_list {
 	struct amendment_list	*next;	/* next pointer */
 	char			*word;
 	char			*alias_for;
-#if 0 /* FIXME: store reference to origin */
+#if 0 /* FIXME: store refence to origin */
 	char			*defined_by;
 #endif
 	int			is_context_sensitive;
@@ -2881,14 +2131,13 @@ struct register_struct {
 static size_t current_register = 0;
 
 static struct register_struct	register_list[] = {
-	{"ADDRESS OF", "USAGE POINTER", CB_FEATURE_ACTIVE},		/* FIXME: currently not handled the "normal" register way */
-	{"COB-CRT-STATUS", "PICTURE 9(4) USAGE DISPLAY VALUE ZERO", CB_FEATURE_ACTIVE},	/* FIXME: currently not handled the "normal" register way */
-	{"DEBUG-ITEM", "PICTURE X(n) USAGE DISPLAY", CB_FEATURE_ACTIVE},	/* FIXME: currently not handled the "normal" register way */
-	{"LENGTH OF", "CONSTANT USAGE BINARY-LONG", CB_FEATURE_ACTIVE},	/* FIXME: currently not handled the "normal" register way */
-	{"NUMBER-OF-CALL-PARAMETERS", "USAGE BINARY-LONG", CB_FEATURE_ACTIVE},	/* OpenCOBOL / GnuCOBOL extension, at least from 1.0+ */
 	{"RETURN-CODE", "GLOBAL USAGE BINARY-LONG VALUE ZERO", CB_FEATURE_ACTIVE},
 	{"SORT-RETURN", "GLOBAL USAGE BINARY-LONG VALUE ZERO", CB_FEATURE_ACTIVE},
+	{"NUMBER-OF-CALL-PARAMETERS", "USAGE BINARY-LONG", CB_FEATURE_ACTIVE},	/* OpenCOBOL / GnuCOBOL extension, at least from 1.0+ */
+	{"COB-CRT-STATUS", "PICTURE 9(4) USAGE DISPLAY VALUE ZERO", CB_FEATURE_ACTIVE},	/* FIXME: currently not handled the "normal" register way */
 	{"TALLY", "GLOBAL PICTURE 9(5) USAGE BINARY VALUE ZERO", CB_FEATURE_ACTIVE},
+	{"ADDRESS OF", "USAGE POINTER", CB_FEATURE_ACTIVE},		/* FIXME: currently not handled the "normal" register way */
+	{"LENGTH OF", "CONSTANT USAGE BINARY-LONG", CB_FEATURE_ACTIVE},	/* FIXME: currently not handled the "normal" register way */
 	{"WHEN-COMPILED", "CONSTANT PICTURE X(16) USAGE DISPLAY", CB_FEATURE_ACTIVE}
 };
 
@@ -2941,7 +2190,7 @@ static struct cb_intrinsic_table function_list[] = {
   },
   { "BYTE-LENGTH",			"cob_intr_byte_length",
 					CB_INTR_BYTE_LENGTH, LENGTH_FUNC,
-					CB_FEATURE_ACTIVE,	2, 1,
+					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_NUMERIC, 0
   },
   { "CHAR",				"cob_intr_char",
@@ -2952,7 +2201,7 @@ static struct cb_intrinsic_table function_list[] = {
   { "CHAR-NATIONAL",			"cob_intr_char_national",
 					CB_INTR_CHAR_NATIONAL, FUNCTION_NAME,
 					CB_FEATURE_NOT_IMPLEMENTED,	1, 1,
-					CB_CATEGORY_NATIONAL, 0
+					CB_CATEGORY_ALPHANUMERIC, 0
   },
   { "COMBINED-DATETIME",		"cob_intr_combined_datetime",
 					CB_INTR_COMBINED_DATETIME, FUNCTION_NAME,
@@ -2963,8 +2212,6 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_CONCATENATE, CONCATENATE_FUNC,
 					CB_FEATURE_ACTIVE,	-1, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "COS",				"cob_intr_cos",
 					CB_INTR_COS, FUNCTION_NAME,
@@ -3007,8 +2254,8 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_CATEGORY_ALPHANUMERIC, 1
   },
   { "E",				"cob_intr_e",
-					CB_INTR_E, FUNCTION_NAME,
-					CB_FEATURE_ACTIVE, 0, 0,
+					CB_INTR_E, FUNCTION_NAME, CB_FEATURE_ACTIVE,
+					0, 0,
 					CB_CATEGORY_NUMERIC, 0
   },
   { "EXCEPTION-FILE",			"cob_intr_exception_file",
@@ -3019,7 +2266,7 @@ static struct cb_intrinsic_table function_list[] = {
   { "EXCEPTION-FILE-N",			"cob_intr_exception_file_n",
 					CB_INTR_EXCEPTION_FILE_N, FUNCTION_NAME,
 					CB_FEATURE_NOT_IMPLEMENTED,	0, 0,
-					CB_CATEGORY_NATIONAL, 0
+					CB_CATEGORY_ALPHANUMERIC, 0
   },
   { "EXCEPTION-LOCATION",		"cob_intr_exception_location",
 					CB_INTR_EXCEPTION_LOCATION, FUNCTION_NAME,
@@ -3029,7 +2276,7 @@ static struct cb_intrinsic_table function_list[] = {
   { "EXCEPTION-LOCATION-N",		"cob_intr_exception_location_n",
 					CB_INTR_EXCEPTION_LOCATION_N, FUNCTION_NAME,
 					CB_FEATURE_NOT_IMPLEMENTED,	0, 0,
-					CB_CATEGORY_NATIONAL, 0
+					CB_CATEGORY_ALPHANUMERIC, 0
   },
   { "EXCEPTION-STATEMENT",		"cob_intr_exception_statement",
 					CB_INTR_EXCEPTION_STATEMENT, FUNCTION_NAME,
@@ -3060,31 +2307,23 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_FORMATTED_CURRENT_DATE, FUNCTION_NAME,
 					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "FORMATTED-DATE",			"cob_intr_formatted_date",
 					CB_INTR_FORMATTED_DATE, FORMATTED_DATE_FUNC,
 					CB_FEATURE_ACTIVE,	2, 2,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "FORMATTED-DATETIME",		"cob_intr_formatted_datetime",
 					CB_INTR_FORMATTED_DATETIME, FORMATTED_DATETIME_FUNC,
 								/* including implicit SYSTEM-OFFSET arg */
 					CB_FEATURE_ACTIVE,	  5, 4,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "FORMATTED-TIME",			"cob_intr_formatted_time",
 					CB_INTR_FORMATTED_TIME, FORMATTED_TIME_FUNC,
     							/* including implicit SYSTEM-OFFSET arg */
 					CB_FEATURE_ACTIVE,	4, 3,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "FRACTION-PART",			"cob_intr_fraction_part",
 					CB_INTR_FRACTION_PART, FUNCTION_NAME,
@@ -3128,7 +2367,7 @@ static struct cb_intrinsic_table function_list[] = {
   },
   { "LENGTH",				"cob_intr_length",
 					CB_INTR_LENGTH, LENGTH_FUNC,
-					CB_FEATURE_ACTIVE,	2, 1,
+					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_NUMERIC, 0
   },
   { "LENGTH-AN",			"cob_intr_byte_length",
@@ -3170,8 +2409,6 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_LOWER_CASE, LOWER_CASE_FUNC,
 					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "LOWEST-ALGEBRAIC",			"cob_intr_lowest_algebraic",
 					CB_INTR_LOWEST_ALGEBRAIC, FUNCTION_NAME,
@@ -3182,8 +2419,6 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_MAX, FUNCTION_NAME,
 					CB_FEATURE_ACTIVE,	-1, 1,
 					CB_CATEGORY_NUMERIC, 0
-					/* Note: category changed to alphanumeric/index/national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "MEAN",				"cob_intr_mean",
 					CB_INTR_MEAN, FUNCTION_NAME,
@@ -3204,8 +2439,6 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_MIN, FUNCTION_NAME,
 					CB_FEATURE_ACTIVE,	-1, 1,
 					CB_CATEGORY_NUMERIC, 0
-					/* Note: category changed to alphanumeric/index/national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "MOD",				"cob_intr_mod",
 					CB_INTR_MOD, FUNCTION_NAME,
@@ -3258,9 +2491,9 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_CATEGORY_ALPHANUMERIC, 0
   },
   { "NATIONAL-OF",			"cob_intr_national_of",
-					CB_INTR_NATIONAL_OF, NATIONAL_OF_FUNC,
-					CB_FEATURE_NOT_IMPLEMENTED, 2, 1,
-					CB_CATEGORY_NATIONAL, 1
+					CB_INTR_NATIONAL_OF, NATIONAL_OF_FUNC, 0,
+					2, 1,
+					CB_CATEGORY_ALPHANUMERIC, 1
   },
   { "NUMERIC-DECIMAL-POINT",		"cob_intr_num_decimal_point",
 					CB_INTR_NUM_DECIMAL_POINT, FUNCTION_NAME,
@@ -3309,12 +2542,12 @@ static struct cb_intrinsic_table function_list[] = {
   },
   { "PRESENT-VALUE",			"cob_intr_present_value",
 					CB_INTR_PRESENT_VALUE, FUNCTION_NAME,
-					CB_FEATURE_ACTIVE,	-1, 2,
+					CB_FEATURE_ACTIVE,	-1, 1,
 					CB_CATEGORY_NUMERIC, 0
   },
   { "RANDOM",				"cob_intr_random",
 					CB_INTR_RANDOM, FUNCTION_NAME,
-					CB_FEATURE_ACTIVE,	1, 0,
+					CB_FEATURE_ACTIVE,	-1, 0,
 					CB_CATEGORY_NUMERIC, 0
   },
   { "RANGE",				"cob_intr_range",
@@ -3331,8 +2564,6 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_REVERSE, REVERSE_FUNC,
 					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "SECONDS-FROM-FORMATTED-TIME",	"cob_intr_seconds_from_formatted_time",
 					CB_INTR_SECONDS_FROM_FORMATTED_TIME, FUNCTION_NAME,
@@ -3360,8 +2591,8 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_CATEGORY_NUMERIC, 0
   },
   { "STANDARD-COMPARE",			"cob_intr_standard_compare",
-					CB_INTR_STANDARD_COMPARE, FUNCTION_NAME,
-					CB_FEATURE_NOT_IMPLEMENTED, 4, 2,
+					CB_INTR_STANDARD_COMPARE, FUNCTION_NAME, 0,
+					4, 2,
 					CB_CATEGORY_ALPHANUMERIC, 0
   },
   { "STANDARD-DEVIATION",		"cob_intr_standard_deviation",
@@ -3378,15 +2609,11 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_SUBSTITUTE, SUBSTITUTE_FUNC,
 					CB_FEATURE_ACTIVE,	-1, 3,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to alphabetic/national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "SUBSTITUTE-CASE",			"cob_intr_substitute_case",
 					CB_INTR_SUBSTITUTE_CASE, SUBSTITUTE_CASE_FUNC,
 					CB_FEATURE_ACTIVE,	-1, 3,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to alphabetic/national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "SUM",				"cob_intr_sum",
 					CB_INTR_SUM, FUNCTION_NAME,
@@ -3432,15 +2659,11 @@ static struct cb_intrinsic_table function_list[] = {
 					CB_INTR_TRIM, TRIM_FUNC,
 					CB_FEATURE_ACTIVE,	2, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "UPPER-CASE",			"cob_intr_upper_case",
 					CB_INTR_UPPER_CASE, UPPER_CASE_FUNC,
 					CB_FEATURE_ACTIVE,	1, 1,
 					CB_CATEGORY_ALPHANUMERIC, 1
-					/* Note: category changed to national depending on the content,
-					   see cb_build_intrinsic */
   },
   { "VARIANCE",				"cob_intr_variance",
 					CB_INTR_VARIANCE, FUNCTION_NAME,
@@ -3499,7 +2722,7 @@ static const unsigned char	pcob_lower_val[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 /* Local functions */
 
 static int
-cb_strcasecmp (const void *s1, const void *s2)
+cob_strcasecmp (const void *s1, const void *s2)
 {
 	const unsigned char	*p1;
 	const unsigned char	*p2;
@@ -3535,16 +2758,14 @@ cb_strcasecmp (const void *s1, const void *s2)
 static int
 reserve_comp (const void *p1, const void *p2)
 {
-	/* For efficiency, we use strcmp here instead of cb_strcasecmp. */
-	return strcmp(((struct cobc_reserved *)p1)->name,
-		      ((struct cobc_reserved *)p2)->name);
+	return cob_strcasecmp (((struct cobc_reserved *)p1)->name,
+			       ((struct cobc_reserved *)p2)->name);
 }
 
 static int
 intrinsic_comp (const void *p1, const void *p2)
 {
-	/* For efficiency, we use strcmp here instead of cb_strcasecmp. */
-	return strcmp (p1, ((struct cb_intrinsic_table *)p2)->name);
+	return cob_strcasecmp (p1, ((struct cb_intrinsic_table *)p2)->name);
 }
 
 static const char *
@@ -3562,11 +2783,9 @@ res_get_feature (const enum cb_system_name_category category)
 	case CB_FEATURE_NAME:
 		s = _("feature name");
 		break;
-	/* LCOV_EXCL_START */
 	default:
 		s = _("unknown");
 		break;
-	/* LCOV_EXCL_STOP */
 	}
 	return s;
 }
@@ -3602,27 +2821,9 @@ has_context_sensitive_indicator (const char *word, const size_t size)
 	return word[size - 1] == '*';
 }
 
-/*
-  Copy the first len characters of source, uppercased, to dest. We use
-  cob_lower_tab instead of toupper for efficiency.
-*/
 static void
-strncpy_upper (char *dest, const char * const source, const size_t len)
-{
-	size_t	i;
-
-	for (i = 0; i < len; ++i) {
-		if (cob_lower_tab[(int)source[i]]) {
-			dest[i] = cob_lower_tab[(int)source[i]];
-		} else {
-			dest[i] = source[i];
-		}
-	}
-}
-
-static void
-allocate_upper_case_str_removing_asterisk (const char *word, const size_t size,
-					   char ** const out_str)
+allocate_str_removing_asterisk (const char *word, const size_t size,
+				char ** const out_str)
 {
 	size_t	chars_to_copy;
 
@@ -3634,7 +2835,7 @@ allocate_upper_case_str_removing_asterisk (const char *word, const size_t size,
 	}
 
 	*out_str = cobc_main_malloc (chars_to_copy + 1U);
-	strncpy_upper (*out_str, word, chars_to_copy);
+	strncpy (*out_str, word, chars_to_copy);
 	(*out_str)[chars_to_copy] = '\0';
 }
 
@@ -3642,7 +2843,7 @@ static COB_INLINE COB_A_INLINE void
 initialize_word (const char *word, const size_t size,
 		 struct amendment_list * const reserved)
 {
-	allocate_upper_case_str_removing_asterisk (word, size, &reserved->word);
+	allocate_str_removing_asterisk (word, size, &reserved->word);
 }
 
 static int
@@ -3677,7 +2878,7 @@ initialize_alias_for (const char *alias_for,
 	if (is_invalid_word (alias_for, size, fname, line)) {
 		reserved->alias_for = NULL;
 	} else {
-		allocate_upper_case_str_removing_asterisk (alias_for, size, &reserved->alias_for);
+		allocate_str_removing_asterisk (alias_for, size, &reserved->alias_for);
 	}
 }
 
@@ -3691,53 +2892,26 @@ get_length_of_amendment_list (void)
 	return length;
 }
 
-static struct cobc_reserved *
-search_reserved_list (const char * const word, const int needs_uppercasing,
-		      const struct cobc_reserved * const list, size_t list_len)
+static COB_INLINE COB_A_INLINE struct cobc_reserved *
+find_reserved_word (struct cobc_reserved to_find)
 {
-	static char		upper_word[43];
-	int			word_len;
-	const char		*sought_word;
-	struct cobc_reserved    to_find;
-
-	if (needs_uppercasing) {
-		word_len = strlen (word);
-		if (word_len > sizeof(upper_word) - 1) {
-			return NULL;
-		}
-
-		/* copy including terminating byte */
-		strncpy_upper (upper_word, word, word_len + 1);
-		sought_word = upper_word;
-	} else {
-		sought_word = word;
-	}
-
-	to_find = create_dummy_reserved (sought_word);
-	return bsearch (&to_find, list, list_len, sizeof (struct cobc_reserved),
-			reserve_comp);
+	return bsearch (&to_find, reserved_words, num_reserved_words,
+			sizeof (struct cobc_reserved), reserve_comp);
 }
 
-static struct cobc_reserved *
-find_reserved_word (const char * const word, const int needs_uppercasing)
+static COB_INLINE COB_A_INLINE struct cobc_reserved *
+find_default_reserved_word (struct cobc_reserved to_find)
 {
-	return search_reserved_list (word, needs_uppercasing,
-				     reserved_words,
-				     num_reserved_words);
-}
-
-static struct cobc_reserved *
-find_default_reserved_word (const char * const word, const int needs_uppercasing)
-{
-	return search_reserved_list (word, needs_uppercasing,
-				     default_reserved_words,
-				     NUM_DEFAULT_RESERVED_WORDS);
+	return bsearch (&to_find, default_reserved_words,
+			NUM_DEFAULT_RESERVED_WORDS,
+			sizeof (struct cobc_reserved), reserve_comp);
 }
 
 static struct cobc_reserved
 get_user_specified_reserved_word (struct amendment_list user_reserved)
 {
 	struct cobc_reserved	cobc_reserved = create_dummy_reserved (NULL);
+	struct cobc_reserved	to_find;
 	struct cobc_reserved	*p;
 
 	cobc_reserved.name = cobc_main_malloc (strlen (user_reserved.word) + 1);
@@ -3747,14 +2921,16 @@ get_user_specified_reserved_word (struct amendment_list user_reserved)
 		cobc_reserved.context_sens
 			= !!user_reserved.is_context_sensitive;
 	} else {
-		p = find_default_reserved_word (user_reserved.alias_for, 0);
+		to_find = create_dummy_reserved (user_reserved.alias_for);
+		p = find_default_reserved_word (to_find);
+
 		if (p) {
 			cobc_reserved.token = p->token;
 		} else {
 			/* FIXME: can we point to the fname originally defining the word? */
 			configuration_error (NULL, 0, 1,
-					     _("alias target '%s' is not a default reserved word"),
-					     user_reserved.alias_for);
+					_("alias target '%s' is not a default reserved word"),
+					user_reserved.alias_for);
 		}
 	}
 
@@ -3769,9 +2945,7 @@ followed_by_addition_for_same_word (const struct amendment_list * const addition
 	/* Walk through the list after the first addition. */
 	for (l = addition->next; l; l = l->next) {
 		/* Look for elements with the same word. */
-		/* NB: We can use strcmp instead of cb_strcasecmp because
-		   everything is already uppercase. */
-		if (!strcmp (addition->word, l->word)
+		if (!cob_strcasecmp (addition->word, l->word)
 		    && l->to_add) {
 			return 1;
 		}
@@ -3791,7 +2965,7 @@ try_remove_removal (struct amendment_list * const addition)
 
 	while (l) {
 		/* Look for elements with the same word. */
-		if (strcmp (addition->word, l->word)) {
+		if (cob_strcasecmp (addition->word, l->word)) {
 			prev = l;
 			l = l->next;
 			continue;
@@ -3799,20 +2973,17 @@ try_remove_removal (struct amendment_list * const addition)
 
 		if (!l->to_add) {
 			prev->next = l->next;
-			free_amendment (l);
+		        free_amendment (l);
 			l = prev->next;
 
-			return 1;
+		        return 1;
 		}
 	}
 
 	return 0;
 }
 
-/*
-  Reduce the amendment list to a list of additions. Any removals which are not
-  cancelled out are deleted.
-*/
+/* Reduce the amendment list to a list of additions. */
 static void
 reduce_amendment_list (void)
 {
@@ -3842,7 +3013,7 @@ reduce_amendment_list (void)
 			if (l == amendment_list) {
 				amendment_list = next;
 			}
-			free_amendment (l);
+		        free_amendment (l);
 			l = next;
 
 			delete_current_elt = 0;
@@ -3858,11 +3029,12 @@ get_reserved_words_with_amendments (void)
 {
 	int	i;
 	struct amendment_list		*amendment;
+	struct cobc_reserved		to_find;
 	struct cobc_reserved		*p;
 
 	if (cb_reserved_words == NULL) {
 		/*
-		  Prepend the default reserved words to the amendment list as
+		  Append the default reserved words to the amendment list as
 		  additions.
 		*/
 		for (i = 0; i < NUM_DEFAULT_RESERVED_WORDS; ++i) {
@@ -3888,12 +3060,13 @@ get_reserved_words_with_amendments (void)
 	  where possible. Free each word once processed.
 	*/
 	for (i = 0; amendment_list; ++i) {
-		p = find_default_reserved_word (amendment_list->word, 0);
-		if (p && !amendment_list->alias_for) {
+		to_find = create_dummy_reserved (amendment_list->word);
+		p = find_default_reserved_word (to_find);
+		if (p) {
 			reserved_words[i] = *p;
 			/*
 			  Note that we ignore if the user specified this word
-			  as context-sensitive.
+			  as context-sensitive or as an alias.
 			*/
 		} else {
 			reserved_words[i] = get_user_specified_reserved_word (*amendment_list);
@@ -3920,12 +3093,6 @@ static void
 initialize_reserved_words_if_needed (void)
 {
 	if (!reserved_words) {
-		/* The default reserved words list should be sorted, but
-		   assuming so causes abstruse errors when a word is put in the
-		   wrong place (e.g. when dealing with EBCDIC or hyphens). */
-		qsort (default_reserved_words, NUM_DEFAULT_RESERVED_WORDS,
-		       sizeof (struct cobc_reserved), reserve_comp);
-
 		if (amendment_list) {
 			get_reserved_words_with_amendments ();
 		} else {
@@ -3938,7 +3105,7 @@ static void
 list_aliases (const struct cobc_reserved * const word)
 {
 	size_t	i;
-	int	alias_found = 0;
+	int     alias_found = 0;
 
 	if (word->token <= 0) {
 		return;
@@ -3950,12 +3117,12 @@ list_aliases (const struct cobc_reserved * const word)
 			continue;
 		}
 		if (!alias_found) {
-			fputs (" (aliased with ", stdout);
+		        fputs (" (aliased with ", stdout);
 			alias_found = 1;
 		} else {
-			fputs (", ", stdout);
+		        fputs (", ", stdout);
 		}
-		fputs (reserved_words[i].name, stdout);
+	        fputs (reserved_words[i].name, stdout);
 	}
 
 	if (alias_found) {
@@ -3965,24 +3132,23 @@ list_aliases (const struct cobc_reserved * const word)
 
 /* Global functions */
 
-/* TO-DO: Duplication with lookup_reserved_word */
 int
 is_reserved_word (const char *word)
 {
-	return !!find_reserved_word (word, 1);
+	return !!find_reserved_word (create_dummy_reserved (word));
 }
 
 int
 is_default_reserved_word (const char *word)
 {
-	return !!find_default_reserved_word (word, 1);
+	return !!find_default_reserved_word (create_dummy_reserved (word));
 }
 
 void
 remove_context_sensitivity (const char *word, const int context)
 {
 	struct cobc_reserved *reserved =
-		find_default_reserved_word (word, 1);
+		find_default_reserved_word (create_dummy_reserved (word));
 
 	if (reserved) {
 		reserved->context_test ^= context;
@@ -4074,100 +3240,14 @@ remove_reserved_word (const char *word, const char *fname, const int line)
 	add_amendment (word, fname, line, 0);
 }
 
-/* add reserved word to the current list, called as "target" of
-   reserved word directives */
-void
-add_reserved_word_now (char * const word, char * const alias_for)
-{
-	size_t		offset;
-	struct cobc_reserved	*new_reserved_words;
-	struct amendment_list	amendment;
-	char		*p;
-
-	/* Nothing to do if the word is already reserved */
-	if (is_reserved_word (word)) {
-		return;
-	}
-
-	/* LCOV_EXCL_START */
-	if (alias_for && !is_default_reserved_word (alias_for)) {
-		/* Should not happen */
-		COBC_ABORT ();
-	}
-	/* LCOV_EXCL_STOP */
-
-	/* Find where to add new word */
-	for (offset = 0; offset < num_reserved_words; ++offset) {
-		if (cb_strcasecmp (word, reserved_words[offset].name) < 0) {
-			break;
-		}
-	}
-
-	/*
-	  Replace reserved_words with a bigger copy, with a gap for the new
-	  element to go in.
-	*/
-	new_reserved_words = cobc_main_malloc ((num_reserved_words + 1)
-					       * sizeof (struct cobc_reserved));
-	memcpy (new_reserved_words, reserved_words,
-		offset * sizeof (struct cobc_reserved));
-	memcpy (new_reserved_words + offset + 1, reserved_words + offset,
-		(num_reserved_words - offset) * sizeof (struct cobc_reserved));
-	++num_reserved_words;
-	cobc_main_free (reserved_words);
-	reserved_words = new_reserved_words;
-
-	/* Add word (in upper case) to list. */
-	amendment.word = word;
-	for (p = amendment.word; *p; ++p) {
-		if (cob_lower_tab[(int)*p]) {
-			*p = cob_lower_tab[(int)*p];
-		}
-	}
-	amendment.alias_for = alias_for;
-	amendment.is_context_sensitive = 0;
-	amendment.to_add = 1;
-	reserved_words[offset] = get_user_specified_reserved_word (amendment);
-}
-
-void
-remove_reserved_word_now (char * const word)
-{
-
-	struct cobc_reserved	*entry_to_remove;
-	struct cobc_reserved	*new_reserved_words;
-	int			entry_offset;
-
-	/* If the word is not a reserved, there's nothing to do. */
-	entry_to_remove = find_reserved_word (word, 1);
-	if (!entry_to_remove) {
-		return;
-	}
-
-	/* Create copy of list without word. */
-	new_reserved_words = cobc_main_malloc ((num_reserved_words - 1)
-					       * sizeof (struct cobc_reserved));
-	entry_offset = entry_to_remove - reserved_words;
-	memcpy (new_reserved_words, reserved_words,
-		entry_offset * sizeof (struct cobc_reserved));
-	memcpy (new_reserved_words + entry_offset,
-		reserved_words + entry_offset + 1,
-		(num_reserved_words - entry_offset - 1) * sizeof (struct cobc_reserved));
-
-	/* Use it to replace old reserved word list. */
-	cobc_main_free (reserved_words);
-	reserved_words = new_reserved_words;
-	--num_reserved_words;
-}
-
 struct cobc_reserved *
 lookup_reserved_word (const char *name)
 {
-	struct cobc_reserved	*p;
-	
+	struct cobc_reserved		*p;
+
 	initialize_reserved_words_if_needed ();
 
-	p = find_reserved_word (name, 1);
+	p = find_reserved_word (create_dummy_reserved (name));
 	if (!p) {
 		return NULL;
 	}
@@ -4186,7 +3266,7 @@ lookup_reserved_word (const char *name)
 		if (unlikely(p->context_test)) {
 			/* Dependent words */
 			if (!(cobc_cs_check & p->context_test)) {
-				return NULL;
+				return p;
 			}
 		}
 		cobc_cs_check |= p->context_set;
@@ -4198,15 +3278,14 @@ lookup_reserved_word (const char *name)
 			return NULL;
 		}
 		/*
-		  The only context-sensitive phrase outside the procedure division
-		  we expect to manually reset cobc_cs_check is OPTIONS and SCREEN.
+		  The only context-sensitive phrase outside the procedure
+		  division we expect to reset cobc_cs_check is OPTIONS.
 
-		  Note: Everything in the environment and identification division can
-		  (and does) reset cobc-cs_check.
+		  TO-DO: Change !cobc_in_procedure to cobc_in_data. (Everything
+		  in the environment and identification division can (and does)
+		  reset cobc-cs_check.)
 		*/
-		if (!cobc_in_procedure
-		 && !(cobc_cs_check & CB_CS_OPTIONS)
-		 && !(cobc_cs_check & CB_CS_SCREEN)) {
+		if (!cobc_in_procedure && !(cobc_cs_check & CB_CS_OPTIONS)) {
 			cobc_cs_check = 0;
 		}
 		return p;
@@ -4233,17 +3312,8 @@ struct cb_intrinsic_table *
 lookup_intrinsic (const char *name, const int checkimpl)
 {
 	struct cb_intrinsic_table	*cbp;
-	static char		upper_name[43];
-	int name_len = strlen (name);
 
-	if (name_len > sizeof(upper_name) - 1) {
-		return NULL;
-	}
-
-	/* copy including terminating byte */
-	strncpy_upper (upper_name, name, name_len + 1);
-
-	cbp = bsearch (upper_name, function_list, NUM_INTRINSICS,
+	cbp = bsearch (name, function_list, NUM_INTRINSICS,
 		sizeof (struct cb_intrinsic_table), intrinsic_comp);
 	if (cbp && (checkimpl || cbp->active == CB_FEATURE_ACTIVE)) {
 		return cbp;
@@ -4268,7 +3338,7 @@ change_intrinsic (const char *name, const char *fname, const int line, enum cb_f
 	size_t		i;
 
 	/* Group "ALL" intrinsics */
-	if (cb_strcasecmp (name, "DIALECT-ALL") == 0) {
+	if (cob_strcasecmp (name, "DIALECT-ALL") == 0) {
 		for (i = 0; i < NUM_INTRINSICS; ++i) {
 			set_intrinsic_mode (&function_list[i], mode);
 		}
@@ -4334,19 +3404,9 @@ static struct register_struct *
 lookup_register (const char *name, const int checkimpl)
 {
 	size_t		i;
-	static char		upper_name[43];
-	int name_len = strlen (name);
-
-	if (name_len > sizeof(upper_name) - 1) {
-		return NULL;
-	}
-
-	/* copy including terminating byte */
-	strncpy_upper (upper_name, name, name_len + 1);
 
 	for (i = 0; i < NUM_REGISTERS; ++i) {
-		/* For efficiency, we use strcmp instead of cb_strcasecmp. */
-		if (strcmp (register_list[i].name, upper_name) == 0) {
+		if (cob_strcasecmp (register_list[i].name, name) == 0) {
 			if (checkimpl || register_list[i].active != CB_FEATURE_DISABLED) {
 				return &register_list[i];
 			}
@@ -4362,23 +3422,10 @@ lookup_register (const char *name, const int checkimpl)
 void
 add_register (const char *name_and_definition, const char *fname, const int line)
 {
-	const char	*name = name_and_definition;
-	int		i;
-	char		*definition;
+	const char *name = name_and_definition;
+	char *definition;
+
 	struct register_struct *special_register;
-
-	/* Enable all registers, if requested. */
-	if (cb_strcasecmp (name, "DIALECT-ALL") == 0) {
-		for (i = 0; i < NUM_REGISTERS; ++i) {
-			/* TODO: add register here */
-			register_list[i].active = CB_FEATURE_ACTIVE;
-			/* Disable reserved word with same name. */
-			remove_reserved_word (register_list[i].name, fname, line);
-		}
-		return;
-	}
-
-	/* Otherwise enable a named register. */
 
 	/* note: we don't break at space as this would kill "ADDRESS OF"
 	         and "PIC 9(05) USAGE ..." */
@@ -4392,7 +3439,7 @@ add_register (const char *name_and_definition, const char *fname, const int line
 	if (!special_register) {
 		if (!definition || *definition == 0) {
 			configuration_error (fname, line, 1,
-				_("special register %s is unknown, needs a definition"), name);
+				_("special register %s is unknown, needs a defintion"), name);
 			return;
 		}
 		/* TODO: add register here */
@@ -4400,55 +3447,36 @@ add_register (const char *name_and_definition, const char *fname, const int line
 		return;
 	}
 	special_register->active = CB_FEATURE_ACTIVE;
-
-	/* Disable reserved word with same name. */
-	remove_reserved_word (name, fname, line);
 }
 
 void
 remove_register (const char *name, const char *fname, const int line)
 {
-	struct register_struct	*special_register;
-	int	i;
+	struct register_struct *special_register = lookup_register (name, 1);
 
 	COB_UNUSED (fname);
 	COB_UNUSED (line);
 
-	if (cb_strcasecmp (name, "DIALECT-ALL") == 0) {
-		for (i = 0; i < NUM_REGISTERS; ++i) {
-			/* TODO: when user-defined registers are possible: do
-			   memory cleanup here */
-			register_list[i].active = CB_FEATURE_DISABLED;
-			/* Disable reserved word with same name. */
-			remove_reserved_word (register_list[i].name, fname,
-					      line);
-		}
-	} else {
-		special_register = lookup_register (name, 1);
-		if (!special_register) {
-			return;
-		}
-		/* TODO: when user-defined registers are possible: do memory
-		   cleanup here */
-		special_register->active = CB_FEATURE_DISABLED;
-		/* Disable reserved word with same name. */
-		remove_reserved_word (name, fname, line);
+	if (!special_register) {
+		return;
 	}
+	/* TODO: when user-defined registers are possible: do memory cleanup here */
+	special_register->active = CB_FEATURE_DISABLED;
 }
 
 const char *
-cb_register_list_get_first (const char **definition)
+cb_register_list_get_first (const char *definition)
 {
 	current_register = 0;
 	return cb_register_list_get_next (definition);
 }
 
 const char *
-cb_register_list_get_next (const char **definition)
+cb_register_list_get_next (const char *definition)
 {
 	for (; current_register < NUM_REGISTERS; ++current_register) {
 		if (register_list[current_register].active == CB_FEATURE_ACTIVE) {
-			*definition = register_list[current_register].definition;
+			definition = register_list[current_register].definition;
 			return register_list[current_register++].name;
 		}
 	}
@@ -4506,7 +3534,7 @@ lookup_system_name (const char *name, const int checkimpl)
 	size_t		i;
 
 	for (i = 0; i < SYSTEM_TAB_SIZE; ++i) {
-		if (cb_strcasecmp (system_name_table[i].name, name) == 0) {
+		if (cob_strcasecmp (system_name_table[i].name, name) == 0) {
 			if (checkimpl || system_name_table[i].active != CB_FEATURE_DISABLED) {
 				return &system_name_table[i];
 			}
@@ -4536,26 +3564,26 @@ change_system_name (const char *name, const char *fname, const int line, enum cb
 
 
 	/* some predefined groups first */
-	if (cb_strcasecmp (name, "DIALECT-ALL") == 0) {
+	if (cob_strcasecmp (name, "DIALECT-ALL") == 0) {
 		for (i = 0; i < SYSTEM_TAB_SIZE; ++i) {
 			set_system_name_mode (&system_name_table[i], mode);
 		}
 		return;
-	} else if (cb_strcasecmp (name, "DIALECT-ALL-DEVICES") == 0) {
+	} else if (cob_strcasecmp (name, "DIALECT-ALL-DEVICES") == 0) {
 		for (i = 0; i < SYSTEM_TAB_SIZE; ++i) {
 			if (system_name_table[i].category == CB_DEVICE_NAME) {
 				set_system_name_mode (&system_name_table[i], mode);
 			}
 		}
 		return;
-	} else if (cb_strcasecmp (name, "DIALECT-ALL-SWITCHES") == 0) {
+	} else if (cob_strcasecmp (name, "DIALECT-ALL-SWITCHES") == 0) {
 		for (i = 0; i < SYSTEM_TAB_SIZE; ++i) {
 			if (system_name_table[i].category == CB_SWITCH_NAME) {
 				set_system_name_mode (&system_name_table[i], mode);
 			}
 		}
 		return;
-	} else if (cb_strcasecmp (name, "DIALECT-ALL-FEATURES") == 0) {
+	} else if (cob_strcasecmp (name, "DIALECT-ALL-FEATURES") == 0) {
 		for (i = 0; i < SYSTEM_TAB_SIZE; ++i) {
 			if (system_name_table[i].category == CB_FEATURE_NAME) {
 				set_system_name_mode (&system_name_table[i], mode);
@@ -4643,8 +3671,7 @@ cb_list_reserved (void)
 	puts ("INSTALLATION");
 	puts ("REMARKS");
 	puts ("SECURITY");
-
-	/* note: starts with an empty line */
+	putchar ('\n');
 	cb_list_registers ();
 }
 

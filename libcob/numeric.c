@@ -38,16 +38,6 @@
 #include <ieeefp.h>
 #endif
 
-#ifdef WIN32
-#ifndef isnan
-#define isnan(x)	_isnan(x)
-#endif
-#ifndef isinf
-#define isinf(x)	((_fpclass(x) == _FPCLASS_PINF) || \
-					 (_fpclass(x) == _FPCLASS_NINF))
-#endif
-#endif
-
 /* Force symbol exports */
 #define	COB_LIB_EXPIMP
 
@@ -55,7 +45,7 @@
 #include "coblocal.h"
 
 #define DECIMAL_CHECK(d1,d2) \
-	if (unlikely (d1->scale == COB_DECIMAL_NAN || \
+	if (unlikely(d1->scale == COB_DECIMAL_NAN || \
 	    d2->scale == COB_DECIMAL_NAN)) { \
 		d1->scale = COB_DECIMAL_NAN; \
 		return; \
@@ -78,6 +68,43 @@ static const unsigned char packed_bytes[] = {
 	0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99
 };
 
+#if	0	/* RXWRXW - IEEE 754 */
+static const unsigned char	bits8[] = {
+	8, 7, 6, 6, 5, 5, 5, 5,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	3, 3, 3, 3, 3, 3, 3, 3,
+	3, 3, 3, 3, 3, 3, 3, 3,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0
+};
+#endif
+
 static cob_decimal	cob_d1;
 static cob_decimal	cob_d2;
 static cob_decimal	cob_d3;
@@ -97,7 +124,6 @@ static mpf_t		cob_mpft_get;
 
 static unsigned char	packed_value[20];
 static cob_u64_t	last_packed_val;
-static int		cob_not_finite = 0;
 
 
 #ifdef	COB_EXPERIMENTAL
@@ -361,14 +387,13 @@ cob_decimal_set (cob_decimal *dst, const cob_decimal *src)
 static void
 cob_decimal_print (cob_decimal *d, FILE *fp)
 {
-	int	scale, len;
-	char	wrk[256];
+	int	scale;
 
-	if (unlikely (d->scale == COB_DECIMAL_NAN)) {
+	if (unlikely(d->scale == COB_DECIMAL_NAN)) {
 		fprintf (fp, "(Nan)");
 		return;
 	}
-	if (unlikely (d->scale == COB_DECIMAL_INF)) {
+	if (unlikely(d->scale == COB_DECIMAL_INF)) {
 		fprintf (fp, "(Inf)");
 		return;
 	}
@@ -385,16 +410,7 @@ cob_decimal_print (cob_decimal *d, FILE *fp)
 		mpz_tdiv_q_ui (cob_mpzt2, cob_mpzt2, 10UL);
 		scale--;
 	}
-	len = gmp_sprintf (wrk, "%Zd", cob_mpzt2);
-	if (len > 0
-	 && scale > 0
-	 && scale < len) {
-		fprintf (fp, "%.*s%c%.*s",len-scale,wrk,'.',scale,wrk+len-scale);
-	} else if (scale == 0) {
-		fprintf (fp, "%s", wrk);
-	} else {
-		fprintf (fp, "%sE%d", wrk, -scale);
-	}
+	gmp_fprintf (fp, "%ZdE%d", cob_mpzt2, -scale);
 }
 
 /* d->value *= 10^n, d->scale += n */
@@ -427,42 +443,63 @@ align_decimal (cob_decimal *d1, cob_decimal *d2)
 
 /* IEEE 754 floats */
 
-static void
-cob_decimal_adjust (cob_decimal *d, mpz_t max_value, int min_exp, int max_exp)
+#if	0	/* Clamp */
+static unsigned int
+cob_clamp_decimal (cob_decimal *d, const unsigned int expomin,
+		   const unsigned int expomax, const unsigned int sigfbits)
 {
-	if (mpz_cmpabs (d->value, max_value) > 0) {
-		/* Adjust by 100000000 to get close */
-		while (mpz_cmpabs (d->value, max_value) > 0
-		    && mpz_divisible_ui_p (d->value, 100000000UL)) {	
-			if (d->scale-8 < min_exp)
-				break;
-			mpz_tdiv_q_ui (d->value, d->value, 100000000UL);
-			d->scale -= 8;
-		}
-		/* Adjust by 1000 to get close */
-		while (mpz_cmpabs (d->value, max_value) > 0
-		    && mpz_divisible_ui_p (d->value, 1000UL)) {
-			if (d->scale-3 < min_exp)
-				break;
-			mpz_tdiv_q_ui (d->value, d->value, 1000UL);
-			d->scale -= 3;
-		}
+	int		size;
+	unsigned int	count;
+
+	if (!mpz_sgn (d->value)) {
+		/* Value is zero */
+		d->scale = 0;
+		return 0;
 	}
-	/* Remove trailing ZEROS */
-	while (mpz_divisible_ui_p (d->value, 10UL)
-	    || mpz_cmpabs (d->value, max_value) > 0) {
-		if (d->scale < min_exp)
+	/* Remove trailing 0 from decimal places (if any) */
+	for ( ; d->scale > 0; d->scale--) {
+		if (!mpz_divisible_ui_p (d->value, 10UL)) {
 			break;
+		}
 		mpz_tdiv_q_ui (d->value, d->value, 10UL);
-		d->scale--;
 	}
-	if (mpz_cmpabs (d->value, max_value) > 0
-	 || d->scale < min_exp
-	 || d->scale > max_exp) {
-		cob_set_exception (COB_EC_SIZE_OVERFLOW);
+	if (d->scale) {
+		/* Have decimal places */
+		size = (int)mpz_sizeinbase (d->value, 2);
+		for (; size > sigfbits && d->scale; d->scale--) {
+			mpz_tdiv_q_ui (d->value, d->value, 10UL);
+			size = (int)mpz_sizeinbase (d->value, 2);
+		}
+		return expomin - (unsigned int)d->scale;
+	}
+	for (count = 0; count < expomax; ++count) {
+		if (!mpz_divisible_ui_p (d->value, 10UL)) {
+			break;
+		}
+		mpz_tdiv_q_ui (d->value, d->value, 10UL);
+	}
+	return expomin + count;
+}
+#endif
+
+#if	0	/* Binary */
+static void
+cob_decimal_set_ieee_binary (cob_decimal *d, const cob_field *f)
+{
+	unsigned char	*data;
+	unsigned int	n;
+	unsigned int	expo;
+	unsigned char	bd[16];
+
+	data = f->data;
+	expo = ((data[0] & 0x7FU) << 8U) | data[1];
+	if (expo == 0x7FFFU) {
+		mpz_set_ui (d->value, 1UL);
+		d->scale = COB_DECIMAL_NAN;
 		return;
 	}
 }
+#endif
 
 static int
 cob_decimal_get_ieee64dec (cob_decimal *d, cob_field *f, const int opt)
@@ -479,34 +516,50 @@ cob_decimal_get_ieee64dec (cob_decimal *d, cob_field *f, const int opt)
 	if (sign < 0) {
 		mpz_neg (d->value, d->value);
 	}
-	cob_decimal_adjust (d, cob_mpz_ten16m1, -369, 398);
-	if (mpz_cmpabs (d->value, cob_mpz_ten16m1) > 0) {
+	for ( ; ; d->scale--) {
+		if (!mpz_divisible_ui_p (d->value, 10UL)) {
+			break;
+		}
+		mpz_tdiv_q_ui (d->value, d->value, 10UL);
+	}
+	if (mpz_cmpabs (d->value, cob_mpz_ten16m1) >= 0) {
 		if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
 			cob_set_exception (COB_EC_SIZE_OVERFLOW);
 			return cobglobptr->cob_exception_code;
 		}
+#if	0	/* RXWRXW - FP Trunc */
+		if (d->scale > 0 ) {
+			for ( ; d->scale; ) {
+#endif
 		for ( ; ; ) {
-			if (d->scale < -369)
-				break;
 			mpz_tdiv_q_ui (d->value, d->value, 10UL);
 			d->scale--;
 			if (mpz_cmpabs (d->value, cob_mpz_ten16m1) < 0) {
 				break;
 			}
 		}
+#if	0	/* RXWRXW - FP Trunc */
+		} else {
+			mpz_tdiv_r (d->value, d->value, cob_mpze10[16]);
+		}
+#endif
 	}
-	if (d->scale < -369 || d->scale > 398) {
+	if (d->scale < -398 || d->scale > 369) {
 		cob_set_exception (COB_EC_SIZE_OVERFLOW);
 		return cobglobptr->cob_exception_code;
 	}
 	expo = 398 - d->scale;
+#if	0	/* Clamp */
+	expo = cob_clamp_decimal (d, 398U, 369U, 53U);
+#endif
 
 	data = 0;
-	mpz_export (&data, NULL, -1, (size_t)8, COB_MPZ_ENDIAN, (size_t)0, d->value);
+	mpz_export (&data, NULL, -1, (size_t)8, COB_MPZ_ENDIAN,
+		    (size_t)0, d->value);
 	/* Move in exponent */
-	if (mpz_sizeinbase (d->value, 2) > 53U) {
+	if (mpz_sizeinbase (d->value, 2) > 51U) {
 		data &= COB_64_SIGF_2;
-		data |= (expo << 51U) | COB_DEC_EXTEND;
+		data |= (expo << 51U) | COB_DEC_EXTEND | COB_64_OR_EXTEND;
 	} else {
 		data &= COB_64_SIGF_1;
 		data |= (expo << 53U);
@@ -577,10 +630,6 @@ cob_decimal_set_ieee64dec (cob_decimal *d, const cob_field *f)
 	if (sign) {
 		mpz_neg (d->value, d->value);
 	}
-	if (d->scale < -369 || d->scale > 398) {
-		cob_set_exception (COB_EC_SIZE_OVERFLOW);
-		return;
-	}
 }
 
 static int
@@ -598,34 +647,60 @@ cob_decimal_get_ieee128dec (cob_decimal *d, cob_field *f, const int opt)
 	if (sign < 0) {
 		mpz_neg (d->value, d->value);
 	}
-	cob_decimal_adjust (d, cob_mpz_ten34m1, -6111, 6176);
-	if (mpz_cmpabs (d->value, cob_mpz_ten34m1) > 0) {
+	for ( ; ; d->scale--) {
+		if (!mpz_divisible_ui_p (d->value, 10UL)) {
+			break;
+		}
+		mpz_tdiv_q_ui (d->value, d->value, 10UL);
+	}
+	if (mpz_cmpabs (d->value, cob_mpz_ten34m1) >= 0) {
 		if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
 			cob_set_exception (COB_EC_SIZE_OVERFLOW);
 			return cobglobptr->cob_exception_code;
 		}
+#if	0	/* RXWRXW - FP Trunc */
+		if (d->scale > 0 ) {
+			for ( ; d->scale; ) {
+#endif
 		for ( ; ; ) {
-			if (d->scale < -6111)
-				break;
 			mpz_tdiv_q_ui (d->value, d->value, 10UL);
 			d->scale--;
 			if (mpz_cmpabs (d->value, cob_mpz_ten34m1) < 0) {
 				break;
 			}
 		}
+#if	0	/* RXWRXW - FP Trunc */
+		} else {
+			mpz_tdiv_r (d->value, d->value, cob_mpze10[34]);
+		}
+#endif
 	}
-	if (d->scale < -6111 || d->scale > 6176) {
+	if (d->scale < -6176 || d->scale > 6111) {
 		cob_set_exception (COB_EC_SIZE_OVERFLOW);
 		return cobglobptr->cob_exception_code;
 	}
 	expo = 6176 - d->scale;
+#if	0	/* Clamp */
+	expo = cob_clamp_decimal (d, 6176U, 6111U, 113U);
+#endif
 
 	data[0] = 0;
 	data[1] = 0;
-	mpz_export (data, NULL, -1, (size_t)16, COB_MPZ_ENDIAN, (size_t)0, d->value);
+	mpz_export (data, NULL, -1, (size_t)16, COB_MPZ_ENDIAN,
+		    (size_t)0, d->value);
 	/* Move in exponent */
-	COB_128_MSW(data) &= COB_128_SIGF_1;
-	COB_128_MSW(data) |= (expo << 49U);
+#if	0	/* IEEE canonical */
+	if (mpz_sizeinbase (d->value, 2) > 113U) {
+		COB_128_MSW(data) &= COB_128_SIGF_2;
+		COB_128_MSW(data) |= (expo << 47U) |
+				     COB_DEC_EXTEND | COB_128_OR_EXTEND;
+	} else {
+#endif
+		COB_128_MSW(data) &= COB_128_SIGF_1;
+		COB_128_MSW(data) |= (expo << 49U);
+#if	0	/* IEEE canonical */
+	}
+#endif
 	if (sign < 0) {
 		COB_128_MSW(data) |= COB_DEC_SIGN;
 	}
@@ -658,6 +733,12 @@ cob_decimal_set_ieee128dec (cob_decimal *d, const cob_field *f)
 		expo = (COB_128_MSW(data) & COB_128_EXPO_2) >> 47U;
 		COB_128_MSW(data) &= COB_128_SIGF_2;
 		COB_128_MSW(data) |= COB_128_OR_EXTEND;
+#if	0	/* RXWRXW - IEEE cap at 34 digits */
+		/* Non-canonical */
+		mpz_set_ui (d->value, 0);
+		d->scale = 0;
+		return;
+#endif
 	} else {
 		expo = (COB_128_MSW(data) & COB_128_EXPO_1) >> 49U;
 		COB_128_MSW(data) &= COB_128_SIGF_1;
@@ -683,6 +764,12 @@ cob_decimal_set_ieee128dec (cob_decimal *d, const cob_field *f)
 	mpz_add_ui (d->value, d->value, (cob_uli_t)(COB_128_LSW(data) & 0xFFFFFFFFU));
 #endif
 
+	if (mpz_cmpabs (d->value, cob_mpz_ten34m1) >= 0) {
+		/* Non-canonical */
+		mpz_set_ui (d->value, 0UL);
+		d->scale = 0;
+		return;
+	}
 	d->scale = (int)expo - 6176;
 	if (d->scale > 0) {
 		mpz_ui_pow_ui (cob_mexp, 10UL, (cob_uli_t)d->scale);
@@ -694,15 +781,63 @@ cob_decimal_set_ieee128dec (cob_decimal *d, const cob_field *f)
 	if (sign) {
 		mpz_neg (d->value, d->value);
 	}
-	cob_decimal_adjust (d, cob_mpz_ten34m1, -6111, 6176);
-	if (mpz_cmpabs (d->value, cob_mpz_ten34m1) > 0) {
-		/* Non-canonical */
-		cob_set_exception (COB_EC_SIZE_OVERFLOW);
-		mpz_set_ui (d->value, 0UL);
+}
+
+#if	0	/* RXWRXW - Endian */
+static void
+cob_decimal_set_ieee128dec (cob_decimal *d, const cob_field *f)
+{
+	unsigned int	sign;
+	unsigned int	expo;
+	unsigned int	comb;
+	unsigned char	data[16];
+
+	/* bit 0 : sign bit */
+	/* bits 1 - 4 : combination field */
+	/* combination = 15 (all bits set) is inf/nan */
+	/* combination > 11 (bits 1100) is extended exponent */
+	/* Exponent length - 14 bits */
+	memcpy (data, f->data, 16);
+	sign = data[0] >> 7U;
+	comb = (data[0] & 0x78U) >> 3U;
+	if (comb == 15U) {
+		mpz_set_ui (d->value, 1UL);
+		d->scale = COB_DECIMAL_NAN;
+		return;
+	}
+	if (comb > 11U) {
+		/* 5 bits from byte 0 - 8 bits from byte 1 - 1 bit from byte 2 */
+		expo = ((data[0] & 0x1FU) << 9U) | (data[1] << 1U) |
+			(data[2] >> 7U);
+		/* Mask out expo bit in byte 2 */
+		data[2] &= 0x7FU;
+		/* Set 100 bits left of significand in byte 1*/
+		data[1] = 0x02U;
+	} else {
+		/* 7 bits from byte 0 - 7 bits from byte 1 */
+		expo = ((data[0] & 0x7FU) << 7U) | (data[1] >> 1U);
+		/* Mask out expo bits */
+		data[1] &= 0x01U;
+	}
+	mpz_import (d->value, 15, 1, 1, 1, 0, &data[1]);
+	if (!mpz_sgn (d->value)) {
+		/* Significand 0 */
 		d->scale = 0;
 		return;
 	}
+	if (sign) {
+		mpz_neg (d->value, d->value);
+	}
+	d->scale = (int)expo - 6176;
+	if (d->scale > 0) {
+		mpz_ui_pow_ui (cob_mexp, 10, (cob_uli_t)d->scale);
+		mpz_mul (d->value, d->value, cob_mexp);
+		d->scale = 0;
+	} else if (d->scale < 0) {
+		d->scale = -(d->scale);
+	}
 }
+#endif
 
 /* Double */
 
@@ -768,9 +903,8 @@ cob_decimal_get_double (cob_decimal *d)
 	double		v;
 	cob_sli_t	n;
 
-	cob_not_finite = 0;
 	v = 0.0;
-	if (unlikely (mpz_size (d->value) == 0)) {
+	if (unlikely(mpz_size (d->value) == 0)) {
 		return v;
 	}
 
@@ -789,7 +923,6 @@ cob_decimal_get_double (cob_decimal *d)
 
 	v = mpf_get_d (cob_mpft);
 	if (!ISFINITE (v)) {
-		cob_not_finite = 1;
 		v = 0.0;
 	}
 	return v;
@@ -994,7 +1127,7 @@ cob_decimal_set_packed (cob_decimal *d, cob_field *f)
 #endif
 	sign = cob_packed_get_sign (f);
 
-	if (unlikely (COB_FIELD_NO_SIGN_NIBBLE (f))) {
+	if (unlikely(COB_FIELD_NO_SIGN_NIBBLE (f))) {
 		endp = f->data + f->size;
 		nibtest = 1;
 	} else {
@@ -1065,7 +1198,7 @@ cob_decimal_get_packed (cob_decimal *d, cob_field *f, const int opt)
 	}
 
 #if	0	/* RXWRXW stack */
-	if (unlikely (mpz_sizeinbase (d->value, 10) > sizeof(buff) - 1)) {
+	if (unlikely(mpz_sizeinbase (d->value, 10) > sizeof(buff) - 1)) {
 #endif
 		mza = mpz_get_str (NULL, 10, d->value);
 #if	0	/* RXWRXW stack */
@@ -1094,7 +1227,7 @@ cob_decimal_get_packed (cob_decimal *d, cob_field *f, const int opt)
 		   then throw an exception */
 		if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
 #if	0	/* RXWRXW stack */
-			if (unlikely (mza != buff)) {
+			if (unlikely(mza != buff)) {
 #endif
 				cob_gmp_free(mza);
 
@@ -1124,7 +1257,7 @@ cob_decimal_get_packed (cob_decimal *d, cob_field *f, const int opt)
 	}
 
 #if	0	/* RXWRXW stack */
-	if (unlikely (mza != buff)) {
+	if (unlikely(mza != buff)) {
 #endif
 		cob_gmp_free(mza);
 
@@ -1206,12 +1339,12 @@ cob_decimal_set_display (cob_decimal *d, cob_field *f)
 
 	data = COB_FIELD_DATA (f);
 	size = COB_FIELD_SIZE (f);
-	if (unlikely (*data == 255)) {
+	if (unlikely(*data == 255)) {
 		mpz_ui_pow_ui (d->value, 10UL, (cob_uli_t)size);
 		d->scale = COB_FIELD_SCALE(f);
 		return;
 	}
-	if (unlikely (*data == 0)) {
+	if (unlikely(*data == 0)) {
 		mpz_ui_pow_ui (d->value, 10UL, (cob_uli_t)size);
 		mpz_neg (d->value, d->value);
 		d->scale = COB_FIELD_SCALE(f);
@@ -1284,7 +1417,7 @@ cob_decimal_get_display (cob_decimal *d, cob_field *f, const int opt)
 
 	/* Store number */
 	diff = (int)(COB_FIELD_SIZE (f) - size);
-	if (unlikely (diff < 0)) {
+	if (unlikely(diff < 0)) {
 		/* Overflow */
 		cob_set_exception (COB_EC_SIZE_OVERFLOW);
 
@@ -1295,7 +1428,7 @@ cob_decimal_get_display (cob_decimal *d, cob_field *f, const int opt)
 			return cobglobptr->cob_exception_code;
 		}
 
-		/* Other size, truncate digits */
+		/* Othersize, truncate digits */
 		memcpy (data, p - diff, COB_FIELD_SIZE (f));
 	} else {
 		/* No overflow */
@@ -1408,7 +1541,7 @@ cob_decimal_get_binary (cob_decimal *d, cob_field *f, const int opt)
 	unsigned int		lo;
 #endif
 
-	if (unlikely (mpz_size (d->value) == 0)) {
+	if (unlikely(mpz_size (d->value) == 0)) {
 		memset (f->data, 0, f->size);
 		return 0;
 	}
@@ -1423,7 +1556,7 @@ cob_decimal_get_binary (cob_decimal *d, cob_field *f, const int opt)
 		}
 	}
 	bitnum = (f->size * 8) - sign;
-	if (unlikely (mpz_sizeinbase (d->value, 2) > bitnum)) {
+	if (unlikely(mpz_sizeinbase (d->value, 2) > bitnum)) {
 		if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
 			goto overflow;
 		}
@@ -1698,18 +1831,9 @@ cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
 		float			fval;
 	} uval;
 
-	if (unlikely (d->scale == COB_DECIMAL_NAN)) {
-		if (!cobglobptr->cob_exception_code
-		 || !cob_last_exception_is (COB_EC_SIZE_ZERO_DIVIDE)) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-		}
+	if (unlikely(d->scale == COB_DECIMAL_NAN)) {
+		cob_set_exception (COB_EC_SIZE_OVERFLOW);
 		return cobglobptr->cob_exception_code;
-	}
-	if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
-		if (unlikely(d->scale == COB_DECIMAL_INF)) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-			return cobglobptr->cob_exception_code;
-		}
 	}
 
 	/* work copy */
@@ -1719,14 +1843,18 @@ cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
 		d = &cob_d1;
 	}
 
-	/* Rounding */
-	if ((opt & COB_STORE_ROUND)) {
-		cob_decimal_do_round (d, f, opt);
-	}
+#if	0	/* RXWRXW - Round FP */
 	if (!COB_FIELD_IS_FP(f)) {
+#endif
+		/* Rounding */
+		if ((opt & COB_STORE_ROUND)) {
+			cob_decimal_do_round (d, f, opt);
+		}
 		/* Append or truncate decimal digits */
 		shift_decimal (d, COB_FIELD_SCALE(f) - d->scale);
+#if	0	/* RXWRXW - Round FP */
 	}
+#endif
 
 	/* Store number */
 	switch (COB_FIELD_TYPE (f)) {
@@ -1738,30 +1866,10 @@ cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
 		return cob_decimal_get_packed (d, f, opt);
 	case COB_TYPE_NUMERIC_FLOAT:
 		uval.fval = (float) cob_decimal_get_double (d);
-		if ((opt & COB_STORE_KEEP_ON_OVERFLOW)
-		 && (isinf (uval.fval) || isnan(uval.fval))) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-			return cobglobptr->cob_exception_code;
-		}
-		if ((opt & COB_STORE_KEEP_ON_OVERFLOW)
-		 && cob_not_finite) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-			return cobglobptr->cob_exception_code;
-		}
 		memcpy (f->data, &uval.fval, sizeof (float));
 		return 0;
 	case COB_TYPE_NUMERIC_DOUBLE:
 		uval.val = cob_decimal_get_double (d);
-		if ((opt & COB_STORE_KEEP_ON_OVERFLOW)
-		 && (isinf (uval.val) || isnan(uval.val))) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-			return cobglobptr->cob_exception_code;
-		}
-		if ((opt & COB_STORE_KEEP_ON_OVERFLOW)
-		 && cob_not_finite) {
-			cob_set_exception (COB_EC_SIZE_OVERFLOW);
-			return cobglobptr->cob_exception_code;
-		}
 		memcpy (f->data, &uval.val, sizeof (double));
 		return 0;
 	case COB_TYPE_NUMERIC_FP_DEC64:
@@ -1817,7 +1925,7 @@ cob_decimal_div (cob_decimal *d1, cob_decimal *d2)
 	DECIMAL_CHECK (d1, d2);
 
 	/* Check for division by zero */
-	if (unlikely (mpz_sgn (d2->value) == 0)) {
+	if (unlikely(mpz_sgn (d2->value) == 0)) {
 		d1->scale = COB_DECIMAL_NAN;
 		/* FIXME: we currently don't handle the fatal exception correct
 		   fatal->abort. We only should set it when it *doesn't* happen
@@ -1827,12 +1935,15 @@ cob_decimal_div (cob_decimal *d1, cob_decimal *d2)
 		cob_set_exception (COB_EC_SIZE_ZERO_DIVIDE);
 		return;
 	}
-	if (unlikely (mpz_sgn (d1->value) == 0)) {
+	if (unlikely(mpz_sgn (d1->value) == 0)) {
 		d1->scale = 0;
 		return;
 	}
 	d1->scale -= d2->scale;
 	shift_decimal (d1, COB_MAX_DIGITS + ((d1->scale < 0) ? -d1->scale : 0));
+#if	0	/* RXWRXW - cdiv */
+	mpz_cdiv_q (d1->value, d1->value, d2->value);
+#endif
 	mpz_tdiv_q (d1->value, d1->value, d2->value);
 }
 
@@ -1960,7 +2071,7 @@ display_add_int (unsigned char *data, const size_t size, int n, const int opt)
 		n /= 10;
 
 		/* Check for overflow */
-		if (unlikely (--sp < data)) {
+		if (unlikely(--sp < data)) {
 			return opt;
 		}
 
@@ -2003,7 +2114,7 @@ display_sub_int (unsigned char *data, const size_t size, int n, const int opt)
 		n /= 10;
 
 		/* Check for overflow */
-		if (unlikely (--sp < data)) {
+		if (unlikely(--sp < data)) {
 			return 1;
 		}
 
@@ -2061,12 +2172,10 @@ cob_display_add_int (cob_field *f, int n, const int opt)
 		n = -n;
 	}
 
-	if (unlikely (scale < 0)) {
+	if (unlikely(scale < 0)) {
 		/* PIC 9(n)P(m) */
 		if (-scale < 10) {
-			/* Fix optimizer bug */
-			while (scale) {
-				++scale;
+			while (scale++) {
 				n /= 10;
 			}
 		} else {
@@ -2131,7 +2240,7 @@ cob_add_int (cob_field *f, const int n, const int opt)
 	int	scale;
 	int	val;
 
-	if (unlikely (n == 0)) {
+	if (unlikely(n == 0)) {
 		return 0;
 	}
 #if	0	/* RXWRXW - Buggy */
@@ -2155,7 +2264,7 @@ cob_add_int (cob_field *f, const int n, const int opt)
 	else {
 		scale = COB_FIELD_SCALE (f);
 		val = n;
-		if (unlikely (scale < 0)) {
+		if (unlikely(scale < 0)) {
 			/* PIC 9(n)P(m) */
 			if (-scale < 10) {
 				while (scale++) {
@@ -2281,7 +2390,7 @@ cob_numeric_cmp (cob_field *f1, cob_field *f2)
 	|| COB_FIELD_TYPE (f1) == COB_TYPE_NUMERIC_DOUBLE
 	|| COB_FIELD_TYPE (f2) == COB_TYPE_NUMERIC_FLOAT
 	|| COB_FIELD_TYPE (f2) == COB_TYPE_NUMERIC_DOUBLE) {
-		return cob_cmp_float (f1, f2);
+		return cob_cmp_float(f1,f2);
 	}
 	cob_decimal_set_field (&cob_d1, f1);
 	cob_decimal_set_field (&cob_d2, f2);
@@ -2479,7 +2588,7 @@ cob_cmp_numdisp (const unsigned char *data, const size_t size,
 
 	p = data;
 	if (!has_sign) {
-		if (unlikely (n < 0)) {
+		if (unlikely(n < 0)) {
 			return 1;
 		}
 		for (inc = 0; inc < size; inc++, p++) {
@@ -2494,7 +2603,7 @@ cob_cmp_numdisp (const unsigned char *data, const size_t size,
 	if (*p >= (unsigned char)'0' && *p <= (unsigned char)'9') {
 		val += COB_D2I (*p);
 	} else {
-		if (unlikely (COB_MODULE_PTR->ebcdic_sign)) {
+		if (unlikely(COB_MODULE_PTR->ebcdic_sign)) {
 			if (cob_get_long_ebcdic_sign (p, &val)) {
 				val = -val;
 			}

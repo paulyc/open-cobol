@@ -40,12 +40,11 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE_ONLY prog.cob], [1], ,
-[prog.cob:10: error: 'I' is not an integer value
-prog.cob:12: error: 'I' is not a numeric value
+[prog.cob: 10: error: 'I' is not an integer value
+prog.cob: 12: error: 'I' is not a numeric value
 ])
 
 AT_CLEANUP
-
 
 AT_SETUP([Subscript range check])
 AT_KEYWORDS([subscripts])
@@ -79,17 +78,16 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE_ONLY prog.cob], [1], ,
-[prog.cob:10: error: subscript of 'X' out of bounds: 0
-prog.cob:16: error: subscript of 'X' out of bounds: 3
-prog.cob:18: error: subscript of 'Y' out of bounds: 0
-prog.cob:24: error: subscript of 'Y' out of bounds: 4
+[prog.cob: 10: error: subscript of 'X' out of bounds: 0
+prog.cob: 16: error: subscript of 'X' out of bounds: 3
+prog.cob: 18: error: subscript of 'Y' out of bounds: 0
+prog.cob: 24: error: subscript of 'Y' out of bounds: 4
 ])
 
 AT_CLEANUP
 
-
-AT_SETUP([Subscript bounds with OCCURS DEPENDING ON])
-AT_KEYWORDS([runsubscripts subscripts odo])
+AT_SETUP([Subscript bounds with ODO (lower)])
+AT_KEYWORDS([runsubscripts subscripts])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -101,13 +99,35 @@ AT_DATA([prog.cob], [
        01 N             PIC 9 VALUE 4.
        PROCEDURE        DIVISION.
            DISPLAY X(0)
-           DISPLAY X(7)
+           END-DISPLAY.
            STOP RUN.
 ])
 
 AT_CHECK([$COMPILE_ONLY prog.cob], [1], ,
-[prog.cob:10: error: subscript of 'X' out of bounds: 0
-prog.cob:11: error: subscript of 'X' out of bounds: 7
+[prog.cob: 10: error: subscript of 'X' out of bounds: 0
+])
+
+AT_CLEANUP
+
+AT_SETUP([Subscript bounds with ODO (upper)])
+AT_KEYWORDS([runsubscripts subscripts])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 G.
+         02 X           PIC X OCCURS 4 TO 6 DEPENDING ON N.
+       01 N             PIC 9 VALUE 4.
+       PROCEDURE        DIVISION.
+           DISPLAY X(7)
+           END-DISPLAY.
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE_ONLY prog.cob], [1], ,
+[prog.cob: 10: error: subscript of 'X' out of bounds: 7
 ])
 
 AT_CLEANUP
@@ -134,12 +154,11 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE_ONLY prog.cob], [1], ,
-[prog.cob:9: error: 'G' cannot be subscripted
-prog.cob:11: error: 'X' cannot be subscripted
+[prog.cob: 9: error: 'G' cannot be subscripted
+prog.cob: 11: error: 'X' cannot be subscripted
 ])
 
 AT_CLEANUP
-
 
 AT_SETUP([Number of subscripts])
 AT_KEYWORDS([subscripts])
@@ -169,17 +188,17 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE_ONLY prog.cob], [1], [],
-[prog.cob:10: error: 'X' requires one subscript
-prog.cob:14: error: 'X' requires one subscript
-prog.cob:16: error: 'Y' requires 2 subscripts
-prog.cob:20: error: 'Y' requires 2 subscripts
+[prog.cob: 10: error: 'X' requires one subscript
+prog.cob: 14: error: 'X' requires one subscript
+prog.cob: 16: error: 'Y' requires 2 subscripts
+prog.cob: 20: error: 'Y' requires 2 subscripts
 ])
 
 AT_CHECK([$COMPILE_ONLY -frelax-syntax-checks prog.cob], [1], [],
-[prog.cob:10: warning: subscript missing for 'X' - defaulting to 1
-prog.cob:14: error: 'X' requires one subscript
-prog.cob:16: warning: subscript missing for 'Y' - defaulting to 1
-prog.cob:20: error: 'Y' requires 2 subscripts
+[prog.cob: 10: warning: subscript missing for 'X' - defaulting to 1
+prog.cob: 14: error: 'X' requires one subscript
+prog.cob: 16: warning: subscript missing for 'Y' - defaulting to 1
+prog.cob: 20: error: 'Y' requires 2 subscripts
 ])
 
 AT_CLEANUP

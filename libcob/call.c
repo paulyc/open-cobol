@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2003-2012, 2014-2018 Free Software Foundation, Inc.
+   Copyright (C) 2003-2012, 2014-2017 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
@@ -170,12 +170,10 @@ static char			*call_filename_buff;
 static char			*call_entry_buff;
 static unsigned char		*call_entry2_buff;
 
-#ifndef	COB_BORKED_DLOPEN
 static lt_dlhandle		mainhandle;
-#endif
 
 static size_t			call_lastsize;
-static size_t			resolve_size = 0;
+static size_t			resolve_size;
 static unsigned int		cob_jmp_primed;
 static cob_field_attr	const_binll_attr =
 			{COB_TYPE_NUMERIC_BINARY, 18, 0, COB_FLAG_HAVE_SIGN, NULL};
@@ -269,8 +267,11 @@ static const unsigned char	pvalid_char[] =
 /* Local functions */
 
 static void
-set_resolve_error (void)
+set_resolve_error (const char *msg, const char *entry)
 {
+	resolve_error_buff[CALL_BUFF_MAX] = 0;
+	snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
+		  "%s '%s'", msg, entry);
 	resolve_error = resolve_error_buff;
 	cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
 }
@@ -369,11 +370,9 @@ do_cancel_module (struct call_hash *p, struct call_hash **base_hash,
 		nocancel = 1;
 	}
 	/* This should be impossible */
-	/* LCOV_EXCL_START */
 	if (p->module->module_active) {
 		nocancel = 1;
 	}
-	/* LCOV_EXCL_STOP */
 	if (p->module->module_ref_count &&
 	    *(p->module->module_ref_count)) {
 		nocancel = 1;
@@ -609,12 +608,10 @@ cob_resolve_internal (const char *name, const char *dirent,
 	lt_dlhandle		handle;
 	size_t			i;
 
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
-	/* LCOV_EXCL_STOP */
-	cobglobptr->cob_exception_code = 0;
+	cob_set_exception (0);
 
 	/* Search the cache */
 	func = lookup (name);
@@ -663,7 +660,6 @@ cob_resolve_internal (const char *name, const char *dirent,
 		break;
 	}
 
-#ifndef	COB_BORKED_DLOPEN
 	/* Search the main program */
 	if (mainhandle != NULL) {
 		func = lt_dlsym (mainhandle, call_entry_buff);
@@ -673,7 +669,6 @@ cob_resolve_internal (const char *name, const char *dirent,
 			return func;
 		}
 	}
-#endif
 
 	/* Search preloaded modules */
 	for (preptr = base_preload_ptr; preptr; preptr = preptr->next) {
@@ -732,10 +727,9 @@ cob_resolve_internal (const char *name, const char *dirent,
 	}
 
 	/* Search external modules */
-	resolve_error_buff[CALL_BUFF_MAX] = 0;
 #ifdef	__OS400__
 	strcpy (call_filename_buff, s);
-	for (p = call_filename_buff; *p; ++p) {
+	for(p = call_filename_buff; *p; ++p) {
 		*p = (cob_u8_t)toupper(*p);
 	}
 	handle = lt_dlopen (call_filename_buff);
@@ -755,9 +749,7 @@ cob_resolve_internal (const char *name, const char *dirent,
 			  "%s%s.%s", dirent, (char *)s, COB_MODULE_EXT);
 		call_filename_buff[COB_NORMAL_MAX] = 0;
 		if (access (call_filename_buff, R_OK) != 0) {
-			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
-				  "module '%s' not found", name);
-			set_resolve_error ();
+			set_resolve_error (_("cannot find module"), name);
 			return NULL;
 		}
 		handle = lt_dlopen (call_filename_buff);
@@ -772,9 +764,8 @@ cob_resolve_internal (const char *name, const char *dirent,
 				return func;
 			}
 		}
-		snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
-			  "entry point '%s' not found", (const char *)s);
-		set_resolve_error ();
+		set_resolve_error (_("cannot find entry point"),
+				   (const char *)s);
 		return NULL;
 	}
 	for (i = 0; i < resolve_size; ++i) {
@@ -801,16 +792,14 @@ cob_resolve_internal (const char *name, const char *dirent,
 					return func;
 				}
 			}
-			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
-				  "entry point '%s' not found", (const char *)s);
-			set_resolve_error ();
+			set_resolve_error (_("cannot find entry point"),
+					   (const char *)s);
 			return NULL;
 		}
 	}
 #endif
-	snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
-		  "module '%s' not found", name);
-	set_resolve_error ();
+
+	set_resolve_error (_("cannot find module"), name);
 	return NULL;
 }
 
@@ -976,11 +965,9 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 	char				*dirent;
 	int				len;
 
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
-	/* LCOV_EXCL_STOP */
 
 	buff = cob_get_buff (f->size + 1);
 	cob_field_to_string (f, buff, f->size);
@@ -1043,7 +1030,6 @@ cob_cancel (const char *name)
 	struct call_hash	**q;
 	struct call_hash	*r;
 
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
@@ -1051,7 +1037,6 @@ cob_cancel (const char *name)
 		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_cancel");
 		cob_stop_run (1);
 	}
-	/* LCOV_EXCL_STOP */
 	entry = cob_chk_dirp (name);
 
 #ifdef	COB_ALT_HASH
@@ -1080,11 +1065,9 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 
 	int	(*cancel_func)(const int, void *, void *, void *, void *);
 
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
-	/* LCOV_EXCL_STOP */
 	if (!f || f->size == 0) {
 		return;
 	}
@@ -1118,7 +1101,6 @@ cob_call (const char *name, const int argc, void **argv)
 	cob_call_union		unifunc;
 	int			i;
 
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
@@ -1130,7 +1112,6 @@ cob_call (const char *name, const int argc, void **argv)
 		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call");
 		cob_stop_run (1);
 	}
-	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = cob_resolve_cobol (name, 0, 1);
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
@@ -1238,7 +1219,6 @@ cob_func (const char *name, const int argc, void **argv)
 void *
 cob_savenv (struct cobjmp_buf *jbuf)
 {
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
@@ -1250,7 +1230,6 @@ cob_savenv (struct cobjmp_buf *jbuf)
 		cob_runtime_error (_("multiple call to 'cob_setjmp'"));
 		cob_stop_run (1);
 	}
-	/* LCOV_EXCL_STOP */
 	cob_jmp_primed = 1;
 	return jbuf->cbj_jmp_buf;
 }
@@ -1266,7 +1245,6 @@ cob_savenv2 (struct cobjmp_buf *jbuf, const int jsize)
 void
 cob_longjmp (struct cobjmp_buf *jbuf)
 {
-	/* LCOV_EXCL_START */
 	if (unlikely(!cobglobptr)) {
 		cob_fatal_error (COB_FERROR_INITIALIZED);
 	}
@@ -1278,7 +1256,6 @@ cob_longjmp (struct cobjmp_buf *jbuf)
 		cob_runtime_error (_("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
 		cob_stop_run (1);
 	}
-	/* LCOV_EXCL_STOP */
 	cob_jmp_primed = 0;
 	longjmp (jbuf->cbj_jmp_buf, 1);
 }
@@ -1379,19 +1356,15 @@ cob_exit_call (void)
 #if	!defined(_WIN32) && !defined(USE_LIBDL)
 	lt_dlexit ();
 #if	0	/* RXWRXW - ltdl leak */
-#ifndef	COB_BORKED_DLOPEN
 	/* Weird - ltdl leaks mainhandle - This appears to work but .. */
-	if (mainhandle) {
-		cob_free (mainhandle);
-	}
-#endif
+	cob_free (mainhandle);
 #endif
 #endif
 
 }
 
 void
-cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
+cob_init_call (cob_global *lptr, cob_settings* sptr)
 {
 	char				*buff;
 	char				*s;
@@ -1412,9 +1385,15 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 	resolve_path = NULL;
 	resolve_alloc = NULL;
 	resolve_error = NULL;
+	resolve_error_buff = NULL;
+	mainhandle = NULL;
 	call_buffer = NULL;
+	call_filename_buff = NULL;
+	call_entry_buff = NULL;
 	call_entry2_buff = NULL;
+	call_table = NULL;
 	call_lastsize = 0;
+	resolve_size = 0;
 	cob_jmp_primed = 0;
 
 #ifndef	HAVE_DESIGNATED_INITS
@@ -1429,8 +1408,6 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 
 #ifndef	COB_ALT_HASH
 	call_table = cob_malloc (sizeof (struct call_hash *) * HASH_SIZE);
-#else
-	call_table = NULL;
 #endif
 
 	call_filename_buff = cob_malloc ((size_t)COB_NORMAL_BUFF);
@@ -1459,18 +1436,10 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 	lt_dlinit ();
 
 #ifndef	COB_BORKED_DLOPEN
-	/* only set main handle if not started by cobcrun as this
-	   saves a check for exported functions in every CALL
-	*/
-	if (check_mainhandle) {
-		mainhandle = lt_dlopen (NULL);
-	} else {
-		mainhandle = NULL;
-	}
+	mainhandle = lt_dlopen (NULL);
 #endif
 
-	if (cobsetptr->cob_preload_str != NULL
-	 && resolve_path != NULL) {
+	if (cobsetptr->cob_preload_str != NULL) {
 
 		p = cob_strdup (cobsetptr->cob_preload_str);
 
@@ -1516,21 +1485,17 @@ cob_get_param_field (int n, const char *caller_name)
 {
 	if (cobglobptr == NULL
 	 || COB_MODULE_PTR == NULL) {
-		/* note: same message in call.c */
-		cob_runtime_warning_external (caller_name, 1,
-			_("cob_init() has not been called"));
+		cob_runtime_warning (_("%s: COBOL runtime is not initialized"), caller_name);
 		return NULL;
 	}
 	if (n < 1
 	 || n > cobglobptr->cob_call_params) {
-		cob_runtime_warning_external (caller_name, 1,
-			_("parameter %d is not within range of %d"),
-			n, cobglobptr->cob_call_params);
+		cob_runtime_warning (_("%s: param %d is not within range of %d"),
+				     caller_name, n, cobglobptr->cob_call_params);
 		return NULL;
 	}
 	if (COB_MODULE_PTR->cob_procedure_params[n - 1] == NULL) {
-		cob_runtime_warning_external (caller_name, 1,
-			_("parameter %d is NULL"), n);
+		cob_runtime_warning (_("%s: param %d is NULL"), caller_name, n);
 		return NULL;
 	}
 	return COB_MODULE_PTR->cob_procedure_params[n - 1];
@@ -1542,9 +1507,7 @@ cob_get_num_params (void)
 	if (cobglobptr) {
 		return cobglobptr->cob_call_params;
 	}
-		/* note: same message in call.c */
-		cob_runtime_warning_external ("cob_get_num_params", 1,
-			_("cob_init() has not been called"));
+	cob_runtime_warning (_("%s COBOL runtime is not initialized"), "cob_get_num_params");
 	return -1;
 }
 
@@ -1740,13 +1703,19 @@ cob_get_u64_param (int n)
 }
 
 char *
-cob_get_picx_param (int n, void *char_field, size_t char_len)
+cob_get_picx_param (int n, void *char_field, int char_len)
 {
+	void		*cbl_data;
+	int		size;
 	cob_field	*f = cob_get_param_field (n, "cob_get_picx_param");
+
 	if (f == NULL) {
 		return NULL;
 	}
-	return cob_get_picx (f->data, f->size, char_field, char_len);
+
+	cbl_data = f->data;
+	size    = f->size;
+	return cob_get_picx (cbl_data, size, char_field, char_len);
 }
 
 void
@@ -1766,9 +1735,8 @@ cob_put_s64_param (int n, cob_s64_t val)
 	cbl_data = f->data;
 	size = f->size;
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_s64_param", 1,
-			_("attempt to over-write constant parameter %d with " CB_FMT_LLD),
-			n, val);
+		cob_runtime_warning (_("%s: attempt to over-write constant param %d with " CB_FMT_LLD),
+						"cob_put_s64_param", n, val);
 		return;
 	}
 
@@ -1829,9 +1797,8 @@ cob_put_u64_param (int n, cob_u64_t val)
 	cbl_data = f->data;
 	size = f->size;
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_u64_param", 1,
-			_("attempt to over-write constant parameter %d with " CB_FMT_LLD),
-			n, val);
+		cob_runtime_warning (_("%s: attempt to over-write constant param %d with " CB_FMT_LLD),
+							"cob_put_u64_param", n, val);
 		return;
 	}
 	switch (f->attr->type) {
@@ -1884,9 +1851,8 @@ cob_put_picx_param (int n, void *char_field)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_picx_param", 1,
-			_("attempt to over-write constant parameter %d with '%s'"),
-			n, (char*)char_field);
+		cob_runtime_warning (_("%s: attempt to over-write constant param %d with '%s'"),
+						"cob_put_picx_param", n, (char*)char_field);
 		return;
 	}
 
@@ -1894,14 +1860,15 @@ cob_put_picx_param (int n, void *char_field)
 }
 
 void *
-cob_get_grp_param (int n, void *char_field, size_t len)
+cob_get_grp_param (int n, void *char_field, int len)
 {
 	cob_field	*f = cob_get_param_field (n, "cob_get_grp_param");
 
 	if (f == NULL) {
 		return NULL;
 	}
-	if (len == 0) {
+
+	if (len <= 0) {
 		len = f->size;
 	}
 
@@ -1916,7 +1883,7 @@ cob_get_grp_param (int n, void *char_field, size_t len)
 }
 
 void
-cob_put_grp_param (int n, void *char_field, size_t len)
+cob_put_grp_param (int n, void *char_field, int len)
 {
 	cob_field	*f = cob_get_param_field (n, "cob_put_grp_param");
 
@@ -1925,12 +1892,11 @@ cob_put_grp_param (int n, void *char_field, size_t len)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_grp_param", 1,
-			"attempt to over-write constant parameter %d", n);
+		cob_runtime_warning (_("%s: attempt to over-write constant param %d"), "cob_put_grp_param", n);
 		return;
 	}
 
-	if (len == 0 || len > f->size) {
+	if (len <= 0 || len > f->size) {
 		len = f->size;
 	}
 	memcpy (f->data, char_field, len);

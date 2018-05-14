@@ -1,6 +1,4 @@
-
-/* config.h, tested with x86/x64 VS2005-2017
-   and OrangeC 6.0.36 */
+/* config.h, tested with x86/x64 VS2005-2017 */
 
 #define NOISAM 0
 #define BDB    1
@@ -8,59 +6,11 @@
 #define CISAM  3
 #define DISAM  4
 
-#define NOCURSES 0
-#define PDCURSES 1
-
-#define MATHLIB_MPIR  1
-#define MATHLIB_GMP   2
-
 /* Use the following global define to switch from VBISAM to another
-   ISAM configuration and/or from PDCURSES to "no curses", if needed */
+   ISAM configuration, if needed
+   *MUST* match linker input in libcob.sln */
 
-#define CONFIGURED_ISAM   VBISAM        /* see possible values above */
-#define CONFIGURED_CURSES PDCURSES      /* see possible values above */
-#define USED_MATHLIB      MATHLIB_MPIR  /* see possible values above */
-
-/* define if you want to use the fall-back to GetUserName
-   for ACCEPT var FROM USER NAME
-   note: only active if %USERNAME% is not set, needs an additional
-   library for each invocation of libcob, even if not used...
-#define HAVE_GETUSERNAME 1
-*/
-
-/* adjust the following linker pragmas if needed */
-
-
-#ifdef WITHIN_LIBCOB
-#ifdef HAVE_GETUSERNAME
-#pragma comment(lib, "advapi32")
-#endif
-
-#if USED_MATHLIB == MATHLIB_MPIR 
-#pragma comment(lib, "mpir")
-#elif USED_MATHLIB == MATHLIB_GMP
-#pragma comment(lib, "libgmp")
-#endif
-
-#if CONFIGURED_CURSES == PDCURSES 
-#pragma comment(lib, "pdcurses")
-#endif
-
-#if CONFIGURED_ISAM == VBISAM 
-#pragma comment(lib, "libvbisam")
-#elif CONFIGURED_ISAM == DISAM
-#pragma comment(lib, "libdisam72")
-#elif CONFIGURED_ISAM == BDB
-#if defined _DEBUG
-#pragma comment(lib, "libdb48d")
-//#pragma comment(lib, "libdb62d")
-#else
-#pragma comment(lib, "libdb48")
-//#pragma comment(lib, "libdb62")
-#endif
-#endif /* CONFIGURED_ISAM */
-
-#endif /* WITHIN_LIBCOB */
+#define CONFIGURED_ISAM VBISAM /* see possible values above */
 
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
@@ -75,12 +25,6 @@
 #else
 #undef COB_64_BIT_POINTER
 #endif
-
-/* Compilation of computed gotos works */
-/* #undef COB_COMPUTED_GOTO */
-
-/* Enable internal logging (Developers only!) */
-/* #undef COB_DEBUG_LOG */
 
 /* Executable extension */
 #define COB_EXE_EXT ".exe"
@@ -115,11 +59,11 @@
 /* Compile/link option for shared code */
 #define COB_SHARED_OPT ""
 
+/* Can use strftime for timezone */
+#define COB_STRFTIME 1
+
 /* Strip command */
 /* #undef COB_STRIP_CMD */
-
-/* Enable extra checks within the compiler (Developers only!) */
-/* #undef COB_TREE_DEBUG */
 
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
@@ -143,21 +87,13 @@
 /* #undef HAVE_CLOCK_GETTIME */
 
 /* curses has color_set function */
-#if CONFIGURED_CURSES != NOCURSES
 #define HAVE_COLOR_SET 1
-#else
-/* #undef HAVE_COLOR_SET */
-#endif
 
 /* ncurses has _nc_freeall function */
 /* #undef HAVE_CURSES_FREEALL */
 
 /* Define to 1 if you have the <curses.h> header file. */
-#if CONFIGURED_CURSES != NOCURSES
 #define HAVE_CURSES_H 1
-#else
-/* #undef HAVE_CURSES_H */
-#endif
 
 /* Define to 1 if you have the <db.h> header file. */
 #if CONFIGURED_ISAM == BDB
@@ -170,13 +106,9 @@
    */
 /* #undef HAVE_DCGETTEXT */
 
-/* curses has define_key function */
-/* #undef HAVE_DEFINE_KEY */
-
 /* Has designated initializers */
 /* #undef HAVE_DESIGNATED_INITS */
-#if defined(_MSC_VER) && _MSC_VER >= 1800 /* = COB_USE_VC2013_OR_GREATER [which is defined later] */ \
- || defined(__ORANGEC__)
+#if defined(_MSC_VER) && _MSC_VER >= 1800 /* = COB_USE_VC2013_OR_GREATER [which is defined later] */
 #define HAVE_DESIGNATED_INITS 1
 #endif
 
@@ -233,13 +165,6 @@
 /* #undef HAVE_ISAM_H */
 #endif
 
-/* Has isfinite function */
-#if defined(__ORANGEC__)
-#define HAVE_ISFINITE 1
-#else
-/* #undef HAVE_ISFINITE */
-#endif
-
 /* Define if you have <langinfo.h> and nl_langinfo(CODESET). */
 /* #undef HAVE_LANGINFO_CODESET */
 
@@ -253,11 +178,7 @@
 /* #undef HAVE_LIBNCURSESW */
 
 /* Define to 1 if you have the `pdcurses' library (-lpdcurses). */
-#if CONFIGURED_CURSES == PDCURSES
 #define HAVE_LIBPDCURSES 1
-#else
-/* #undef HAVE_LIBPDCURSES */
-#endif
 
 /* Define to 1 if you have the `posix4' library (-lposix4). */
 /* #undef HAVE_LIBPOSIX4 */
@@ -307,11 +228,6 @@
 /* Define to 1 if you have the <pdcurses.h> header file. */
 /* #undef HAVE_PDCURSES_H */
 
-/* Define to 1 if you have the `popen' function. */
-#ifdef _MSC_VER
-#define HAVE_POPEN 1
-#endif
-
 /* Define to 1 if you have the `raise' function. */
 #define HAVE_RAISE 1
 
@@ -322,14 +238,11 @@
 /* #undef HAVE_REALPATH */
 
 /* Define to 1 if you have the `setenv' function. */
-/* MSC does *NOT* has `setenv' (!)
+/* _MSC does *NOT* has `setenv' (!)
    But as the handling of the fallback `putenv' is different in POSIX and _MSC
    (POSIX stores no duplicate of `putenv', where _MSC does), we pretend to
-   have support for `setenv' and define it in common.c using _putenv_s,
-   omitting the override parameter */
-#ifdef _MSC_VER
+   have support for `setenv', redefining it to _putenv_s, omitting the last param */
 #define HAVE_SETENV 1
-#endif
 
 /* Define to 1 if you have the `setlocale' function. */
 #define HAVE_SETLOCALE 1
@@ -368,11 +281,7 @@
 #define HAVE_STRERROR 1
 
 /* Define to 1 if you have the <strings.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_STRINGS_H 1
-#else
 /* #undef HAVE_STRINGS_H */
-#endif
 
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
@@ -386,15 +295,14 @@
 /* Define to 1 if you have the `strtol' function. */
 #define HAVE_STRTOL 1
 
+/* Define to 1 if you have the `strxfrm' function. */
+#define HAVE_STRXFRM 1
+
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_SYS_TIME_H 1
-#else
 /* #undef HAVE_SYS_TIME_H */
-#endif
 
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
@@ -406,11 +314,7 @@
 #define HAVE_TIMEZONE 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_UNISTD_H 1
-#else
 /* #undef HAVE_UNISTD_H */
-#endif
 
 /* ncurses has use_legacy_coding function */
 /* #undef HAVE_USE_LEGACY_CODING */
@@ -444,7 +348,7 @@
 #define PACKAGE_NAME "GnuCOBOL"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "GnuCOBOL 3.0-dev"
+#define PACKAGE_STRING "GnuCOBOL 2.3"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "gnucobol"
@@ -453,7 +357,7 @@
 #define PACKAGE_URL "https://www.gnu.org/software/gnucobol/"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.0-dev"
+#define PACKAGE_VERSION "2.3-dev"
 
 /* Define a patch level (numeric, max. 8 digits) */
 #define PATCH_LEVEL COB_NUM_TAR_DATE
@@ -490,7 +394,7 @@
 
 
 /* Version number of package */
-#define VERSION "3.0-dev"
+#define VERSION "2.3-dev"
 
 /* Use CISAM as ISAM handler */
 #if CONFIGURED_ISAM == BDB
@@ -500,11 +404,7 @@
 #endif
 
 /* curses library for extended SCREEN I/O */
-#if CONFIGURED_CURSES == PDCURSES
 #define WITH_CURSES "pdcurses"
-#else
-#define WITH_CURSES "disabled"
-#endif
 
 /* Use Berkeley DB library as emulation of ISAM handler */
 #if CONFIGURED_ISAM == BDB
@@ -548,10 +448,6 @@
 # endif
 #endif
 
-/* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
-   `char[]'. */
-#define YYTEXT_POINTER 1
-
 /* Define to 1 if on MINIX. */
 /* #undef _MINIX */
 
@@ -573,15 +469,8 @@
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 /* #undef size_t */
 
-#undef NOISAM
 #undef BDB
 #undef VBISAM
 #undef CISAM
 #undef DISAM
 #undef CONFIGURED_ISAM
-#undef NOCURSES
-#undef PDCURSES
-#undef CONFIGURED_CURSES
-#undef MATHLIB_MPIR
-#undef MATHLIB_GMP
-#undef USED_MATHLIB
