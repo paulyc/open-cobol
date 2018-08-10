@@ -1,6 +1,4 @@
-
-/* config.h, tested with x86/x64 VS2005-2017
-   and OrangeC 6.0.36 */
+/* config.h, tested with x86/x64 VS2005-2017 */
 
 #define NOISAM 0
 #define BDB    1
@@ -76,12 +74,6 @@
 #undef COB_64_BIT_POINTER
 #endif
 
-/* Compilation of computed gotos works */
-/* #undef COB_COMPUTED_GOTO */
-
-/* Enable internal logging (Developers only!) */
-/* #undef COB_DEBUG_LOG */
-
 /* Executable extension */
 #define COB_EXE_EXT ".exe"
 
@@ -115,11 +107,11 @@
 /* Compile/link option for shared code */
 #define COB_SHARED_OPT ""
 
+/* Can use strftime for timezone */
+#define COB_STRFTIME 1
+
 /* Strip command */
 /* #undef COB_STRIP_CMD */
-
-/* Enable extra checks within the compiler (Developers only!) */
-/* #undef COB_TREE_DEBUG */
 
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
@@ -170,13 +162,9 @@
    */
 /* #undef HAVE_DCGETTEXT */
 
-/* curses has define_key function */
-/* #undef HAVE_DEFINE_KEY */
-
 /* Has designated initializers */
 /* #undef HAVE_DESIGNATED_INITS */
-#if defined(_MSC_VER) && _MSC_VER >= 1800 /* = COB_USE_VC2013_OR_GREATER [which is defined later] */ \
- || defined(__ORANGEC__)
+#if defined(_MSC_VER) && _MSC_VER >= 1800 /* = COB_USE_VC2013_OR_GREATER [which is defined later] */
 #define HAVE_DESIGNATED_INITS 1
 #endif
 
@@ -231,13 +219,6 @@
 #define HAVE_ISAM_H 1
 #else
 /* #undef HAVE_ISAM_H */
-#endif
-
-/* Has isfinite function */
-#if defined(__ORANGEC__)
-#define HAVE_ISFINITE 1
-#else
-/* #undef HAVE_ISFINITE */
 #endif
 
 /* Define if you have <langinfo.h> and nl_langinfo(CODESET). */
@@ -307,11 +288,6 @@
 /* Define to 1 if you have the <pdcurses.h> header file. */
 /* #undef HAVE_PDCURSES_H */
 
-/* Define to 1 if you have the `popen' function. */
-#ifdef _MSC_VER
-#define HAVE_POPEN 1
-#endif
-
 /* Define to 1 if you have the `raise' function. */
 #define HAVE_RAISE 1
 
@@ -322,14 +298,12 @@
 /* #undef HAVE_REALPATH */
 
 /* Define to 1 if you have the `setenv' function. */
-/* MSC does *NOT* has `setenv' (!)
+/* _MSC does *NOT* has `setenv' (!)
    But as the handling of the fallback `putenv' is different in POSIX and _MSC
    (POSIX stores no duplicate of `putenv', where _MSC does), we pretend to
    have support for `setenv' and define it in common.c using _putenv_s,
    omitting the override parameter */
-#ifdef _MSC_VER
 #define HAVE_SETENV 1
-#endif
 
 /* Define to 1 if you have the `setlocale' function. */
 #define HAVE_SETLOCALE 1
@@ -368,11 +342,7 @@
 #define HAVE_STRERROR 1
 
 /* Define to 1 if you have the <strings.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_STRINGS_H 1
-#else
 /* #undef HAVE_STRINGS_H */
-#endif
 
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
@@ -386,15 +356,14 @@
 /* Define to 1 if you have the `strtol' function. */
 #define HAVE_STRTOL 1
 
+/* Define to 1 if you have the `strxfrm' function. */
+#define HAVE_STRXFRM 1
+
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_SYS_TIME_H 1
-#else
 /* #undef HAVE_SYS_TIME_H */
-#endif
 
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
@@ -406,11 +375,7 @@
 #define HAVE_TIMEZONE 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#if defined(__ORANGEC__)
-#define HAVE_UNISTD_H 1
-#else
 /* #undef HAVE_UNISTD_H */
-#endif
 
 /* ncurses has use_legacy_coding function */
 /* #undef HAVE_USE_LEGACY_CODING */
@@ -444,7 +409,7 @@
 #define PACKAGE_NAME "GnuCOBOL"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "GnuCOBOL 3.0-dev"
+#define PACKAGE_STRING "GnuCOBOL 2.2"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "gnucobol"
@@ -453,7 +418,7 @@
 #define PACKAGE_URL "https://www.gnu.org/software/gnucobol/"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.0-dev"
+#define PACKAGE_VERSION "2.2-rc"
 
 /* Define a patch level (numeric, max. 8 digits) */
 #define PATCH_LEVEL COB_NUM_TAR_DATE
@@ -490,7 +455,7 @@
 
 
 /* Version number of package */
-#define VERSION "3.0-dev"
+#define VERSION "2.2-rc"
 
 /* Use CISAM as ISAM handler */
 #if CONFIGURED_ISAM == BDB

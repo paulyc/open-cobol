@@ -695,10 +695,6 @@ cob_move_display_to_edited (cob_field *f1, cob_field *f2)
 	}
 
 	/* Count the number of digit places before decimal point */
-	/*
-	  TO-DO: This is computed in cb_build_picture; add computed results to
-	  cb_field and use those.
-	*/
 	for (p = COB_FIELD_PIC (f2); p->symbol; ++p) {
 		c = p->symbol;
 		repeat = p->times_repeated;
@@ -928,16 +924,18 @@ cob_move_display_to_edited (cob_field *f1, cob_field *f2)
 					}
 				}
 				if (sign_symbol && curr_symbol) {
-					/*
-					  Only one of $ and +/- can be floating
-					  in any given picture, so the symbol
-					  which comes after the other must be
-					  the one which floats.
-					*/
 					if (sign_first) {
 						*dst = curr_symbol;
+						--dst;
+						if (dst >= f2->data) {
+							*dst = sign_symbol;
+						}
 					} else {
 						*dst = sign_symbol;
+						--dst;
+						if (dst >= f2->data) {
+							*dst = curr_symbol;
+						}
 					}
 				} else if (sign_symbol) {
 					*dst = sign_symbol;
@@ -1696,9 +1694,7 @@ cob_init_move (cob_global *lptr, cob_settings *sptr)
 void
 cob_put_u64_compx (cob_u64_t val, void *mem, int len)
 {
-#if !defined(WORDS_BIGENDIAN)
 	cob_u64_t	ulong;
-#endif
 	cob_u32_t	uint;
 	cob_u16_t	ushort;
 	
@@ -1790,9 +1786,7 @@ cob_put_u64_comp5 (cob_u64_t val, void *mem, int len)
 void
 cob_put_s64_compx (cob_s64_t val, void *mem, int len)
 {
-#if !defined(WORDS_BIGENDIAN)
 	cob_s64_t	slong;
-#endif
 	cob_s32_t	sint;
 	cob_s16_t	sshort;
 #if defined(WORDS_BIGENDIAN)
@@ -2346,12 +2340,13 @@ cob_put_pointer (void *val, void *mem)
 }
 
 char *
-cob_get_picx (void *cbl_data, size_t len, void *char_field, size_t num_chars)
+cob_get_picx (void *cbl_data, int len, void *char_field, int num_chars)
 {
-	size_t		i;
+	int		i;
 	cob_u8_t	*p = cbl_data;
 
-	for (i = len; i != 0 && (p[i - 1] == ' ' || p[i - 1] == 0); i--);
+	for (i = len - 1; i >= 0 && (p[i] == ' ' || p[i] == 0); i--);
+	i++;
 
 	if (char_field == NULL) {
 		num_chars = i + 1;
@@ -2368,9 +2363,9 @@ cob_get_picx (void *cbl_data, size_t len, void *char_field, size_t num_chars)
 }
 
 void
-cob_put_picx( void *cbl_data, size_t len, void *string)
+cob_put_picx( void *cbl_data, int len, void *string)
 {
-	size_t	i, j;
+	int	i,j;
 	cob_u8_t	*p = cbl_data;
 	j = strlen ((char*)string);
 	if (j > len) {
