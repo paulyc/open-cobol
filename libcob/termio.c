@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2001-2012, 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2012, 2014-2018 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart
 
    This file is part of GnuCOBOL.
@@ -15,7 +15,7 @@
    GNU Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -35,6 +35,7 @@
 
 /* Force symbol exports */
 #define	COB_LIB_EXPIMP
+
 #include "libcob.h"
 #include "coblocal.h"
 
@@ -42,8 +43,6 @@
 
 static cob_global		*cobglobptr = NULL;
 static cob_settings		*cobsetptr = NULL;
-
-static char no_syspunch_error_raised = 0;
 
 static const unsigned short	bin_digits[] =
 	{ 1, 3, 5, 8, 10, 13, 15, 17, 20 };
@@ -302,13 +301,11 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 			} else {
 				close_fp = 1;
 			}
-#ifdef HAVE_POPEN
 		/* display to configured print command (piped) */
 		} else if (cobsetptr->cob_display_print_pipe != NULL) {
 			if (!cobsetptr->cob_unix_lf) {
 				mode = "w";
 			} else {
-				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
 			fp = popen (cobsetptr->cob_display_print_pipe, mode);
@@ -317,7 +314,6 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 			} else {
 				pclose_fp = 1;
 			}
-#endif
 		/* fallback: display to the defined SYSOUT */
 		} else {
 			fp = stdout;
@@ -331,37 +327,6 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		}
 	} else if (to_device == 1) {	/* SYSERR */
 		fp = stderr;
-	} else if (to_device == 3) {	/* SYSPCH */
-		/* open if not available but specified */
-		if (!cobsetptr->cob_display_punch_file
-		 && cobsetptr->cob_display_punch_filename != NULL) {
-			if (!cobsetptr->cob_unix_lf) {
-				mode = "w";
-			} else {
-				/* Note: this doesn't seem to help with pipes :-( */
-				mode = "wb";
-			}
-			fp = fopen (cobsetptr->cob_display_punch_filename, mode);
-			if (fp == NULL) {
-				cob_runtime_warning (_("cannot open %s (=%s)"),
-					"COB_DISPLAY_PUNCH_FILE", cobsetptr->cob_display_punch_filename);
-				cob_free (cobsetptr->cob_display_punch_filename);
-				cobsetptr->cob_display_punch_filename = NULL;
-			} else {
-				cobsetptr->cob_display_punch_file = fp;
-			}
-		}
-		/* display to already opened punch file */
-		if (cobsetptr->cob_display_punch_file) {
-			fp = cobsetptr->cob_display_punch_file;
-		} else {
-			cob_set_exception (COB_EC_IMP_DISPLAY);	/* come back to this later... */
-			if (!no_syspunch_error_raised) {
-				no_syspunch_error_raised = 1;
-				cob_runtime_warning (_("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
-			}
-			return;
-		}
 	} else {		/* general (SYSOUT) */
 		fp = stdout;
 		if (cobglobptr->cob_screen_initialized) {
@@ -390,11 +355,9 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		putc ('\n', fp);
 		fflush (fp);
 	}
-#ifdef HAVE_POPEN
 	if (pclose_fp) {
 		pclose (fp);
 	}
-#endif
 	if (close_fp) {
 		fclose (fp);
 	}
@@ -502,7 +465,7 @@ display_alnum_dump (cob_field *f, FILE *fp, int indent, int max_width)
 					fprintf(fp,"%c",f->data[i]);
 			}
 			if (i < f->size)
-				fprintf(fp,"\n%*s%5u : ",indent-8," ",(unsigned int)(i+1));
+				fprintf(fp,"\n%*s%5d : ",indent-8," ",(unsigned int)(i+1));
 		}
 		return;
 	}
@@ -535,7 +498,7 @@ display_alnum_dump (cob_field *f, FILE *fp, int indent, int max_width)
 				wrk[j+2] = 0;
 			}
 		}
-		fprintf(fp,"\n%*s%5u x %s",indent-8," ",(unsigned int)pos,wrk);
+		fprintf(fp,"\n%*s%5d x %s",indent-8," ",(unsigned int)pos,wrk);
 		if (i < f->size)
 			fprintf(fp,"\n%*s",indent," ");
 	}

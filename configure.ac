@@ -2,7 +2,7 @@
 # Configure template for GnuCOBOL
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2001-2012, 2014-2019 Free Software Foundation, Inc.
+# Copyright (C) 2001-2012, 2014-2018 Free Software Foundation, Inc.
 # Written by Keisuke Nishida, Roger While, Ron Norman, Simon Sobisch,
 # Edward Hart
 #
@@ -19,16 +19,16 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+# along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.64])
 
 AC_INIT([GnuCOBOL],
-	[3.0-dev],
+	[3.0-rc1],
 	[bug-gnucobol@gnu.org],
 	[gnucobol],
 	[https://www.gnu.org/software/gnucobol/])
-AC_REVISION([GnuCOBOL snapshot $Revision: 2248 $])
+AC_REVISION([GnuCOBOL preview $Revision: 2555 $])
 AC_CONFIG_SRCDIR([libcob.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_TESTDIR([tests])
@@ -77,8 +77,6 @@ AH_TEMPLATE([WITH_DB], [Use Berkeley DB library as emulation of ISAM handler])
 AH_TEMPLATE([WITH_CISAM], [Use CISAM as ISAM handler])
 AH_TEMPLATE([WITH_DISAM], [Use DISAM as ISAM handler])
 AH_TEMPLATE([WITH_VBISAM], [Use VBISAM as ISAM handler])
-AH_TEMPLATE([WITH_XML2], [Use libxml2 as XML handler])
-AH_TEMPLATE([WITH_CJSON], [Use cJSON as JSON handler])
 
 AH_TEMPLATE([COB_EXPORT_DYN], [Compile/link option for exporting symbols])
 AH_TEMPLATE([COB_PIC_FLAGS], [Compile/link option for PIC code])
@@ -212,9 +210,6 @@ AC_DEFINE_UNQUOTED([MAX_CALL_FIELD_PARAMS], [$with_max_call_params])
 
 # Basic capability tests
 
-# Default CFLAGS (removed -g set in AC_INIT for compatibility)
-: ${CFLAGS="-O2"}
-
 AC_PROG_CC([gcc xlc cc])
 AC_PROG_CC_STDC
 
@@ -284,8 +279,8 @@ unset cob_keyw
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([memmove memset setlocale fcntl strerror strcasecmp \
 	strchr strrchr strdup strstr strtol gettimeofday localeconv \
-	getexecname canonicalize_file_name popen raise readlink realpath \
-	setenv strcoll])
+	readlink getexecname canonicalize_file_name realpath \
+	strcoll strxfrm setenv raise])
 
 # Check for timezone
 AC_MSG_CHECKING([for timezone variable access])
@@ -379,10 +374,6 @@ AX_CODE_COVERAGE
 if test "$COB_USES_GCC_NO_ICC" != yes -a "$enable_code_coverage" = "yes"; then
 	AC_MSG_ERROR([Code coverage checks are only usable with GCC!])
 fi
-
-
-# set PKG_CONFIG to use (cross-compile aware)
-PKG_PROG_PKG_CONFIG
 
 
 # Configure options part II (needing compilation)
@@ -490,108 +481,6 @@ if test "$with_cisam" != "yes" -a "$with_disam" != "yes" -a "$with_vbisam" != "y
   [with_db=yes])
 fi
 
-
-AC_ARG_WITH([xml2],
-  [AS_HELP_STRING([--with-xml2],
-    [(GnuCOBOL) Use libxml2 as XML handler (default)])],
-  [],
-  [with_xml2=check])
-
-AS_IF([test "$with_xml2" = "yes" -o "$with_xml2" = "check"], [
-	PKG_CHECK_MODULES([XML2], [libxml-2.0], [], [
-	if test -z "$XML2_CFLAGS" -o -z "$XML2_LIBS"; then
-	  AC_CHECK_PROG(xml2_config_found, xml2-config, "yes")
-	  if test "$xml2_config_found" = "yes"; then
-	    if test -z "$XML2_CFLAGS"; then
-	      XML2_CFLAGS="`xml2-config --cflags`"
-	    fi
-	    if test -z "$XML2_LIBS"; then
-	      XML2_LIBS="`xml2-config --libs`"
-	    fi
-	  fi
-	fi])
-	curr_libs="$LIBS"; curr_cppflags="$CPPFLAGS"
-	if test -n "$XML2_CFLAGS"; then
-	  CPPFLAGS="$CPPFLAGS $XML2_CFLAGS"
-	fi
-	if test -z "$XML2_LIBS"; then
-	  XML2_LIBS="-lxml2"
-	fi
-	LIBS="$LIBS $XML2_LIBS"
-	AC_CHECK_HEADERS([libxml/xmlversion.h libxml/uri.h libxml/xmlwriter.h],
-		[AX_CHECK_DEFINE([libxml/xmlwriter.h], [LIBXML_WRITER_ENABLED], [],
-		   AC_MSG_ERROR([libxml2 is required to be configured with xmlWriter]))
-		],
-		[if test "$with_xml2" = "yes"; then 
-		   AC_MSG_ERROR([Headers for libxml2 are required for --with-xml2, you may adjust XML2_CFLAGS])
-		else
-		   with_xml2=no
-		fi])
-	if test "$with_xml2" != "no"; then 
-		AC_MSG_CHECKING([if linking against libxml2 with "$XML2_LIBS" works])
-		AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <libxml/xmlwriter.h>]],
-		  [[xmlNewTextWriterFilename (NULL, 0);]])],
-		  [AC_DEFINE([WITH_XML2], [1]) AC_MSG_RESULT([yes])
-		   with_xml2=yes
-		   LIBCOB_LIBS="$LIBCOB_LIBS $XML2_LIBS"],
-		  [AC_MSG_RESULT([no])
-		   if test "$with_xml2" = "yes"; then
-		     AC_MSG_ERROR([[xml library is required for --with-xml2, you may adjust XML2_LIBS]])
-		   else
-		     AC_MSG_WARN([xml library not found, you may adjust XML2_LIBS])
-		     with_xml2=no; LIBS="$curr_libs"; CPPFLAGS="$curr_cppflags"
-		   fi])
-	else
-		AC_MSG_WARN([Headers for libxml2 missing, you may adjust XML2_CFLAGS])
-		 with_xml2=no; LIBS="$curr_libs"; CPPFLAGS="$curr_cppflags"
-	fi
-])
-
-
-AC_ARG_WITH([cjson],
-  [AS_HELP_STRING([--with-cjson],
-    [(GnuCOBOL) Use cJSON as JSON handler (default)])],
-  [],
-  [with_cjson=check])
-
-AS_IF([test "$with_cjson" = "yes" -o "$with_cjson" = "check"], [
-	PKG_CHECK_MODULES([CJSON], [libcjson], [], [#])
-	curr_libs="$LIBS"; curr_cppflags="$CPPFLAGS"
-	if test -n "$CJSON_CFLAGS"; then
-	  CPPFLAGS="$CPPFLAGS $CJSON_CFLAGS"
-	fi
-	if test -z "$CJSON_LIBS"; then
-	  CJSON_LIBS="-lcjson"
-	fi
-	LIBS="$LIBS $CJSON_LIBS"
-	AC_CHECK_HEADERS([cjson/cJSON.h],
-		[],
-		[if test "$with_cjson" = "yes"; then 
-		   AC_MSG_ERROR([Headers for libcjson are required for --with-cjson, you may adjust CJSON_CFLAGS])
-		else
-		   with_cjson=no
-		fi])
-	if test "$with_cjson" != "no"; then 
-		AC_MSG_CHECKING([if linking against libcjson with "$CJSON_LIBS" works])
-		AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <cjson/cJSON.h>]],
-		  [[cJSON_CreateNull ();]])],
-		  [AC_DEFINE([WITH_CJSON], [1]) AC_MSG_RESULT([yes])
-		   with_cjson=yes
-		   LIBCOB_LIBS="$LIBCOB_LIBS $CJSON_LIBS"],
-		  [AC_MSG_RESULT([no])
-		   if test "$with_cjson" = "yes"; then
-		     AC_MSG_ERROR([[cJSON library is required for --with-cjson, you may adjust CJSON_LIBS]])
-		   else
-		     AC_MSG_WARN([xml library not found, you may adjust CJSON_LIBS])
-		     with_cjson=no; LIBS="$curr_libs"; CPPFLAGS="$curr_cppflags"
-		   fi])
-	else
-		AC_MSG_WARN([Headers for libcjson missing, you may adjust CJSON_CFLAGS])
-		 with_cjson=no; LIBS="$curr_libs"; CPPFLAGS="$curr_cppflags"
-	fi
-])
-
-
 AC_ARG_WITH([dl],
   [AS_HELP_STRING([--with-dl],
     [(GnuCOBOL) Use system dynamic loader (default)])],
@@ -657,11 +546,6 @@ LIBS="$MYOLDLIBS -lgmp"
 # get GMP version from lib
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	#include <stdio.h>
-	#ifdef _WIN32
-	#ifndef __GMP_LIBGMP_DLL
-	#define __GMP_LIBGMP_DLL 1
-	#endif
-	#endif
 	#include <gmp.h>
 	int main (int argc, char **argv)
 	{
@@ -724,22 +608,11 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <time.h>]],
   [AC_DEFINE([HAVE_CLOCK_GETTIME], [1]) AC_MSG_RESULT([yes])],
   [AC_MSG_RESULT([no])])
 
-AC_MSG_CHECKING([for isfinite])
+AC_MSG_CHECKING([for isfinite ])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]],
   [[isfinite ( 1.0 );]])],
   [AC_DEFINE([HAVE_ISFINITE], [1]) AC_MSG_RESULT([yes])],
-  [AC_MSG_RESULT([no])]
-  # Check prototype for finite in math.h (alternative ieeefp.h)
-  AC_MSG_CHECKING([prototype for finite in <math.h>])
-  AC_EGREP_HEADER(finite, math.h, AC_MSG_RESULT([yes]),
-  	[AC_MSG_RESULT([no])
-  	AC_MSG_CHECKING([prototype for finite in <ieeefp.h>])
-  	AC_EGREP_HEADER(finite, ieeefp.h,
-  	[AC_DEFINE([HAVE_FINITE_IEEEFP_H], [1]) AC_MSG_RESULT([yes])],
-  	AC_MSG_ERROR([
-  		Declaration for finite function neither in math.h nor in ieeefp.h]))
-  	])
-)
+  [AC_MSG_RESULT([no])])
 
 # Check for raise (optional) --> done via AC_CHECK_FUNCS
 #AC_MSG_CHECKING([for raise])
@@ -748,6 +621,17 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]],
 #  [AC_DEFINE([HAVE_RAISE], [1]) AC_MSG_RESULT([yes])],
 #  [AC_MSG_RESULT([no])],
 #  [])
+
+# Check prototype for finite in math.h (alternative ieeefp.h)
+AC_MSG_CHECKING([prototype for finite in <math.h>])
+AC_EGREP_HEADER(finite, math.h, AC_MSG_RESULT([yes]),
+	[AC_MSG_RESULT([no])
+	AC_MSG_CHECKING([prototype for finite in <ieeefp.h>])
+	AC_EGREP_HEADER(finite, ieeefp.h,
+	[AC_DEFINE([HAVE_FINITE_IEEEFP_H], [1]) AC_MSG_RESULT([yes])],
+	AC_MSG_ERROR([
+		Declaration for finite function neither in math.h nor in ieeefp.h]))
+	])
 
 AC_CHECK_FUNCS([fdatasync sigaction])
 
@@ -1090,10 +974,10 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
 	{
 	void	*test_ptr;
 	test_ptr = &&lab;
-
+	
 	goto *test_ptr;
 	return 1;
-
+	
 	lab:
 	return 0;
 	}]])],
@@ -1199,14 +1083,11 @@ AC_RUN_IFELSE([AC_LANG_PROGRAM([[]], [[
 #	CFLAGS="$MYOLDCFLAGS"
 #fi
 
-# Check if aligned attribute seems to work
-# done:   does not raise an error
-# *TODO*: has same output as omitting it)
+# Check if aligned attribute works
 AC_MSG_CHECKING([for aligned attribute])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]],
 	[[char testchar[4] __attribute__((aligned));]])],
-	[AC_DEFINE([HAVE_ATTRIBUTE_ALIGNED], [1]) AC_MSG_RESULT([yes])
-	],
+	[AC_DEFINE([HAVE_ATTRIBUTE_ALIGNED], [1]) AC_MSG_RESULT([yes])],
 	[AC_MSG_RESULT([no])])
 
 # GnuCOBOL Configuration
@@ -1235,8 +1116,8 @@ fi
 COB_OBJECT_EXT="$OBJEXT"
 LIBS="$save_libs"
 COB_EXPORT_DYN="`eval echo $export_dynamic_flag_spec`"
-# FIXME: lt_prog_compiler_pic is not always correct, for example with occ
 COB_PIC_FLAGS=`echo "$lt_prog_compiler_pic" | sed -e 's/^ //'`
+COB_SHARED_OPT="-shared"
 
 if test "$enable_cflags_setting" = "yes"; then
 
@@ -1261,6 +1142,10 @@ if test "$enable_cflags_setting" = "yes"; then
 fi
 
 unset enable_cflags_setting
+
+if test "$enable_debug" != "yes" -a "x$CFLAGS" != "x"; then
+	CFLAGS=`echo "$CFLAGS" | sed -e 's/-g3//' -e 's/-g//' -e 's/^ //' -e 's/ $//'`
+fi
 
 if test "$COB_USES_GCC" = "yes"; then
 	if test "x$CFLAGS" != "x"; then
@@ -1346,18 +1231,17 @@ if test "x$CPPFLAGS" != "x"; then
 	fi
 fi
 if test "x$cob_temp_flags" != "x"; then
-	cob_temp_flags=`echo "$cob_temp_flags" \
-	| sed -e 's/-g3//' -e 's/-g //' -e 's/-g$//' -e 's/ $//' -e 's/^ //' \
-	      -e 's/@<:@+-@:>@O@<:@0-9s@:>@//' -e 's/ $//' -e 's/^ //' \
-	      -e 's/-O//' -e 's/ $//' -e 's/^ //'    \
-	      -e 's/-fmessage-length=0//'            \
-	      -e 's/@<:@^ @:>@*-D_FORTIFY_SOURCE=.//'      \
-	      -e 's/-fstack-protector-strong//'      \
-	      -e 's/-fstack-protector-all//'         \
-	      -e 's/-fstack-protector//'             \
-	      -e 's/-funwind-tables//'               \
-	      -e 's/-fasynchronous-unwind-tables//'  \
-	      -e 's/  */ /g' -e 's/ $//' -e 's/^ //'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-g3//' -e 's/-g//' -e 's/ $//' -e 's/^ //'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/@<:@+-@:>@O@<:@0-9s@:>@//' -e 's/ $//' -e 's/^ //'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-O//' -e 's/ $//' -e 's/^ //'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fmessage-length=0//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-D_FORTIFY_SOURCE=.//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fstack-protector-strong//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fstack-protector-all//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fstack-protector//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-funwind-tables//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/-fasynchronous-unwind-tables//'`
+	cob_temp_flags=`echo "$cob_temp_flags" | sed -e 's/  */ /g' -e 's/ $//' -e 's/^ //'`
 fi
 
 if test "x$cob_temp_flags" != "x"; then
@@ -1374,11 +1258,6 @@ AH_VERBATIM([_XOPEN_SOURCE_EXTENDED],
 # undef _XOPEN_SOURCE_EXTENDED
 #endif])dnl
 
-# FIXME: COB_SHARED_OPT should at least be checked for "compiles";
-#        for example breaks with occ and other non-GCC compilers,
-#        *at least* check that compilation still works when using this option...
-COB_SHARED_OPT="-shared"
-
 COB_FIX_LIB="$COB_EXPORT_DYN"
 COB_FIX_LIBTOOL=""
 case $host_os in
@@ -1387,23 +1266,17 @@ case $host_os in
 		COB_CONFIG_DIR="`cd /usr && pwd -W`/local/share/$PACKAGE_TARNAME/config"
 		COB_COPY_DIR="`cd /usr && pwd -W`/local/share/$PACKAGE_TARNAME/copy"
 	fi
-	if test "$COB_USES_GCC" = "yes"; then
-		COB_EXPORT_DYN="-Wl,--export-all-symbols -Wl,--enable-auto-import -Wl,--enable-auto-image-base"
-		COB_FIX_LIBTOOL="-Wl,--enable-auto-import"
-	fi
+	COB_EXPORT_DYN="-Wl,--export-all-symbols -Wl,--enable-auto-import -Wl,--enable-auto-image-base"
 	COB_FIX_LIB=""
+	COB_FIX_LIBTOOL="-Wl,--enable-auto-import"
 	;;
   cygwin*)
-	if test "$COB_USES_GCC" = "yes"; then
-		COB_EXPORT_DYN="-Wl,--export-all-symbols -Wl,--enable-auto-import -Wl,--enable-auto-image-base"
-		COB_FIX_LIBTOOL="-Wl,--enable-auto-import"
-	fi
+	COB_EXPORT_DYN="-Wl,--export-all-symbols -Wl,--enable-auto-import -Wl,--enable-auto-image-base"
 	COB_FIX_LIB=""
+	COB_FIX_LIBTOOL="-Wl,--enable-auto-import"
 	;;
   darwin* | rhapsody*)
-	if test "$COB_USES_GCC" = "yes"; then
-		COB_SHARED_OPT="-bundle -flat_namespace -undefined suppress"
-	fi
+	COB_SHARED_OPT="-bundle -flat_namespace -undefined suppress"
 	;;
   hpux*)
 	if test "$COB_USES_GCC" != "yes"; then
@@ -1506,18 +1379,6 @@ else
 	COB_HAS_CURSES=yes
 fi
 
-if test "$with_xml2" = "yes"; then
-	COB_HAS_XML2=yes
-else
-	COB_HAS_XML2=no
-fi
-
-if test "$with_cjson" = "yes"; then
-	COB_HAS_CJSON=yes
-else
-	COB_HAS_CJSON=no
-fi
-
 unset COB_USES_GCC
 unset COB_USES_GCC_NO_ICC
 unset COB_USES_ICC_ONLY
@@ -1565,8 +1426,6 @@ AC_SUBST([COB_FIX_LIBTOOL])
 AC_SUBST([COB_KEYWORD_INLINE])
 AC_SUBST([COB_HAS_ISAM])
 AC_SUBST([COB_HAS_CURSES])
-AC_SUBST([COB_HAS_XML2])
-AC_SUBST([COB_HAS_CJSON])
 AC_SUBST([COB_HAS_64_BIT_POINTER])
 AC_SUBST([COB_PATCH_LEVEL], [$with_patch_level]) # needed for bin/cob-config
 
@@ -1639,6 +1498,8 @@ elif test "$with_db" = "yes"; then
 else
   AC_MSG_NOTICE([ ISAM I/O (no handler configured):            NO])
 fi
-AC_MSG_NOTICE([ Use libxml2 for XML I/O                      ${COB_HAS_XML2}])
-AC_MSG_NOTICE([ Use cJSON for JSON I/O                       ${COB_HAS_CJSON}])  
 unset DEFINE_DL
+if test "$enable_code_coverage" = "yes"; then
+	AC_MSG_WARN([Code coverage checks are currently disabled because of compatibility issues!])
+	AC_MSG_NOTICE([Use trunk (or enable it in */Makefile.am) to use coverage checks.])
+fi

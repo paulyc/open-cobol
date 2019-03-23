@@ -154,8 +154,6 @@ Extensions
 * Extended ACCEPT::             Extended ACCEPT statement.
 * ACCEPT special::              ACCEPT special keys.
 * Extended DISPLAY::            Extended DISPLAY statement.
-* FUNCTION CONTENT-LENGTH::     Length of NUL byte terminated pointer data.
-* FUNCTION CONTENT-OF::         Content of data at pointer, by length or NUL.
 
 System Routines
 
@@ -677,33 +675,38 @@ The last part of the listing file is the summary of warnings an error in the com
 Enable all run-time error checks.
 
 @item -g
-Produce C debugging information in the output.
-
-@item -ftrace
-Generate trace code (log executed procedures, if tracing is enabled).
-
-@item -ftraceall
-Generate trace code (log executed procedures and statements,
-if tracing is enabled).
-
-@item -fsource-location
-Generate source location code (implied by @code{-debug} or @code{-g}).
-
-@item -fstack-check
-Enable @code{PERFORM} stack checking (implied by @code{-debug} or @code{-g}).
-
-@item -fdebugging-line
-Enable debugging lines (@code{D} in indicator column; >>D directive).
+Produce debugging information in the output.
 
 @item -O
 Enable optimization of code size and execution speed.
-See your C compiler documentation, for example @code{man gcc} for details.
+See @code{man gcc} for details.
 
 @item -O2
 Optimize even more.
 
 @item -Os
 Optimize for size. Optimizer will favour code size over execution speed.
+
+@item -ftrace
+Generate trace code (log executed procedures).
+
+@item -ftraceall
+Generate trace code (log executed procedures and statements).
+
+@item -fsyntax-only
+Check syntax only; don't emit any output.
+
+@item -fdebugging-line
+Enable debugging lines (@code{D} in indicator column).
+
+@item -fsource-location
+Generate source location code (implied by @code{-debug} or @code{-g}).
+
+@item -fimplicit-init
+Do automatic initialization of the COBOL runtime system.
+
+@item -fstack-check
+Enable @code{PERFORM} stack checking (implied by @code{-debug} or @code{-g}).
 
 @item -fnotrunc
 Do not truncate binary fields according to PICTURE.
@@ -718,9 +721,6 @@ Do not truncate binary fields according to PICTURE.
 @comment{TODO: Clarify}
 Add default file extension.
 
-@item -fsyntax-only
-Check syntax only; don't emit any output.
-
 @item -fmfcomment
 Treat lines with @code{*} or @code{/} in column 1 as comment (fixed-format only).
 
@@ -734,12 +734,8 @@ Numeric display sign ASCII (default on ASCII machines).
 @item -fsign=EBCDIC
 Numeric display sign EBCDIC (default on EBCDIC machines).
 
-@item -fintrinsics=[ALL|intrinsic function name(,name,...)]
-Allow use of all or specific intrinsic functions without @code{FUNCTION}
-keyword.
-
-Note: defining this within your source with
-@code{CONFIGURATION SECTION. REPOSITORY.} is preferred. 
+@item -ffunctions-all
+Allow use of intrinsic functions without @code{FUNCTION} keyword.
 
 @item -ffold-copy=LOWER
 Fold @code{COPY} subject to lower case (default no transformation).
@@ -749,9 +745,6 @@ Fold @code{COPY} subject to upper case (default no transformation).
 
 @item -save-temps(=<dir>)
 Save intermediate files (by default, in current directory).
-
-@item -fimplicit-init
-Do automatic initialization of the COBOL runtime system.
 
 @end table
 
@@ -1182,7 +1175,6 @@ enum cob_runtime_option_switch @{
    COB_SET_RUNTIME_TRACE_FILE              /* 'p' is  FILE *  */
    COB_SET_RUNTIME_DISPLAY_PRINTER_FILE    /* 'p' is  FILE *  */
    COB_SET_RUNTIME_RESCAN_ENV              /* rescan environment variables */
-   COB_SET_RUNTIME_DISPLAY_PUNCH_FILE      /* 'p' is  FILE *  */
 @};
 COB_EXPIMP  void  cob_set_runtime_option   (enum cob_runtime_option_switch opt, void *p);
 @end example
@@ -1193,10 +1185,6 @@ cob_set_runtime_option (COB_SET_RUNTIME_TRACE_FILE, (void*)((FILE*)myfd));
 You could also redirect all DISPLAY UPON PRINTER output to a file by:
 @example
 cob_set_runtime_option (COB_SET_RUNTIME_DISPLAY_PRINTER_FILE, (void*)((FILE*)myfd));
-@end example
-You could also redirect all DISPLAY UPON SYSPUNCH output to a file by:
-@example
-cob_set_runtime_option (COB_SET_RUNTIME_DISPLAY_PUNCH_FILE, (void*)((FILE*)myfd));
 @end example
 
 Another routine can be used to return the current value of the option.
@@ -1322,8 +1310,6 @@ run-time errors with source locations.
 * Extended ACCEPT::             Extended @code{ACCEPT} statement.
 * ACCEPT special::              @code{ACCEPT} special keys.
 * Extended DISPLAY::            Extended @code{DISPLAY} statement.
-* FUNCTION CONTENT-LENGTH::     Length of NUL byte terminated pointer data.
-* FUNCTION CONTENT-OF::         Content of data at pointer, by length or NUL.
 @end menu
 
 
@@ -1769,60 +1755,6 @@ Ring the bell.
 This is the same as @code{WITH BELL}.
 
 @end vtable
-
-@node FUNCTION CONTENT-LENGTH
-@section CONTENT-LENGTH
-@cindex @code{FUNCTION CONTENT-LENGTH}
-
-@code{FUNCTION CONTENT-LENGTH} returns the length of NUL byte terminated data given a pointer:
-
-@example
-       identification division.
-       program-id. zlen.
-       data division.
-       working-storage section.
-       01 ptr   usage pointer.
-       01 str   pic x(4) value z"abc".
-
-      *> Testing CONTENT-LENGTH
-       procedure division.
-
-       set ptr to address of str
-       display content-length(ptr)
-
-       goback.
-       end program hosted.
-@end example
-
-
-@node FUNCTION CONTENT-OF
-@section CONTENT-OF
-@cindex @code{FUNCTION CONTENT-OF}
-
-@code{FUNCTION CONTENT-OF} returns an alphanumeric field given a pointer and optional length:
-
-Data from pointer is returned as a COBOL field either by scanning for a NUL byte or using the
-optional length. Reference modification of result allowed.
-
-@example
-       identification division.
-       program-id. contents.
-       data division.
-       working-storage section.
-       01 ptr   usage pointer.
-       01 str   pic x(4) value z"abc".
-
-      *> Testing CONTENT-OF
-       procedure division.
-
-       set ptr to address of str
-       display content-of(ptr)
-       display content-of(ptr, 2)
-       display content-of(ptr)(2:2)
-
-       goback.
-       end program hosted.
-@end example
 
 
 @node System Routines, Appendices, Extensions, Top

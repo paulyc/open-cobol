@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2003-2012, 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2003-2012, 2014-2018 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
@@ -15,7 +15,7 @@
    GNU Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -72,6 +72,10 @@ lt_dlsym (HMODULE hmod, const char *p)
 	return modun.voidptr;
 }
 
+#if	0	/* RXWRXW - Win dlsym */
+#define lt_dlsym(x,y)	GetProcAddress(x, y)
+#endif
+
 #define lt_dlclose(x)	FreeLibrary(x)
 #define	lt_dlinit()
 #define	lt_dlexit()
@@ -107,6 +111,7 @@ lt_dlerror (void)
 
 /* Force symbol exports */
 #define	COB_LIB_EXPIMP
+
 #include "libcob.h"
 #include "coblocal.h"
 

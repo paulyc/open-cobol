@@ -1,7 +1,7 @@
 #
 # Makefile gnucobol/tests
 #
-# Copyright (C) 2003-2012, 2014-2019 Free Software Foundation, Inc.
+# Copyright (C) 2003-2012, 2014-2018 Free Software Foundation, Inc.
 # Written by Keisuke Nishida, Roger While, Simon Sobisch
 #
 # This file is part of GnuCOBOL.
@@ -17,13 +17,12 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+# along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 SUBDIRS = cobol85
 
 TESTSUITE = $(srcdir)/testsuite
 TESTSUITE_MANUAL = $(srcdir)/testsuite_manual
-dist_check_SCRIPTS = listings-sed.sh
 
 testsuite_sources = \
 	testsuite.src/used_binaries.at \
@@ -51,7 +50,6 @@ testsuite_sources = \
 	testsuite.src/run_fundamental.at \
 	testsuite.src/run_initialize.at \
 	testsuite.src/run_misc.at \
-	testsuite.src/run_ml.at \
 	testsuite.src/run_refmod.at \
 	testsuite.src/run_reportwriter.at \
 	testsuite.src/run_returncode.at \
@@ -81,7 +79,7 @@ check-local: $(TESTSUITE)
 
 clean-local:
 	rm -rf *.dir *.log
-
+	
 ./run_prog_manual.sh: run_prog_manual.sh.in
 	@cp $(srcdir)/run_prog_manual.sh.in $@
 

@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+# along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 if COB_MAKE_RUN_BINARIES
 COBCINFOSH = . $(top_builddir)/tests/atconfig && . $(top_builddir)/tests/atlocal && \
@@ -61,8 +61,7 @@ cbhelp.tex cbchelp.tex cbrese.tex cbintr.tex cbsyst.tex cbmnem.tex: \
 	$(COBCINFOSH) "fixtimestamps"
 endif
 
-EXTRA_DIST = gnucobol.pdf
-dist_noinst_SCRIPTS = cobcinfo.sh
+EXTRA_DIST = gnucobol.pdf cobcinfo.sh
 
 AM_MAKEINFOHTMLFLAGS = --no-headers --no-split
 CLEANFILES = *.aux  *.cp *.fn *.ky *.log *.pg *.toc *.tp *.vr *.vrs

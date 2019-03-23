@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2007-2012, 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2007-2012, 2014-2018 Free Software Foundation, Inc.
    Written by Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
@@ -15,7 +15,7 @@
    GNU Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -43,7 +43,7 @@
 #endif
 
 
-#ifdef ENABLE_NLS
+#if	defined(ENABLE_NLS) && defined(COB_NLS_RUNTIME)
 #include "lib/gettext.h"
 #define _(s)		gettext(s)
 #define N_(s)		gettext_noop(s)
@@ -256,7 +256,7 @@ typedef struct __cob_settings {
 	unsigned int	cob_timeout_scale;	/* timeout scale */
 	unsigned int	cob_insert_mode;	/* insert toggle, 0=off, 1=on */
 	unsigned int	cob_exit_wait;		/* wait on program exit if no ACCEPT came after last DISPLAY */
-	const char		*cob_exit_msg;		/* message for cob_exit_wait */
+	char			*cob_exit_msg;		/* message for cob_exit_wait */
 
 
 	/* reportio.c */
@@ -265,12 +265,6 @@ typedef struct __cob_settings {
 	/* termio.c */
 	char 		*cob_display_print_pipe;		/* DISPLAY UPON PRINTER destination */
 	char		*cob_display_print_filename;	/* File name for DISPLAY UPON PRINTER */
-
-	char		*cob_display_punch_filename;	/* File name for DISPLAY UPON SYSPUNCH/SYSPCH */
-	FILE		*cob_display_punch_file;	/* possibly external FILE* to write DISPLAY UPON SYSPUNCH information to
-											   cob_display_punch_filename is used to open the file
-											   on first DISPLAY UPON SYSPCH statement and closed
-											   on runtime exit */
 
 	/* common.c */
 	char		external_trace_file;	/* use external FILE * for TRACE[ALL] */
@@ -346,7 +340,6 @@ COB_HIDDEN void		cob_init_intrinsic	(cob_global *);
 COB_HIDDEN void		cob_init_strings	(cob_global *);
 COB_HIDDEN void		cob_init_move		(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_screenio	(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_mlio		(cob_global * const);
 
 COB_HIDDEN void		cob_exit_screen		(void);
 
@@ -356,14 +349,10 @@ COB_HIDDEN void		cob_exit_reportio	(void);
 COB_HIDDEN void		cob_exit_call		(void);
 COB_HIDDEN void		cob_exit_intrinsic	(void);
 COB_HIDDEN void		cob_exit_strings	(void);
-COB_HIDDEN void		cob_exit_mlio		(void);
 
 COB_HIDDEN int		cob_real_get_sign	(cob_field *);
 COB_HIDDEN void		cob_real_put_sign	(cob_field *, const int);
 
-#ifndef COB_WITHOUT_DECIMAL
-COB_HIDDEN void		cob_decimal_init2	(cob_decimal *, const cob_uli_t);
-#endif
 COB_HIDDEN void		cob_decimal_setget_fld	(cob_field *, cob_field *,
 						 const int);
 COB_HIDDEN void		cob_decimal_move_temp	(cob_field *, cob_field *);

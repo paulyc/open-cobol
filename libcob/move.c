@@ -1,7 +1,6 @@
 /*
-   Copyright (C) 2002-2012, 2014-2019 Free Software Foundation, Inc.
-   Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman,
-   Edwart Hard
+   Copyright (C) 2002-2012, 2014-2017 Free Software Foundation, Inc.
+   Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman
 
    This file is part of GnuCOBOL.
 
@@ -16,7 +15,7 @@
    GNU Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -36,6 +35,7 @@
 
 /* Force symbol exports */
 #define	COB_LIB_EXPIMP
+
 #include "libcob.h"
 #include "coblocal.h"
 
@@ -153,7 +153,7 @@ cob_binary_mget_sint64 (const cob_field * const f)
 			own_byte_memcpy ((unsigned char *)&n, f->data, f->size);
 			n = COB_BSWAP_64 (n);
 			/* Shift with sign */
-			n >>= (cob_s64_t)8 * fsiz;
+			n >>= 8 * fsiz;
 		} else {
 			own_byte_memcpy (((unsigned char *)&n) + fsiz, f->data, f->size);
 			n = COB_BSWAP_64 (n);
@@ -162,7 +162,7 @@ cob_binary_mget_sint64 (const cob_field * const f)
 		if (COB_FIELD_HAVE_SIGN (f)) {
 			own_byte_memcpy (((unsigned char *)&n) + fsiz, f->data, f->size);
 			/* Shift with sign */
-			n >>= (cob_s64_t)8 * fsiz;
+			n >>= 8 * fsiz;
 		} else {
 			own_byte_memcpy ((unsigned char *)&n, f->data, f->size);
 		}
@@ -546,33 +546,27 @@ static void
 cob_move_binary_to_binary (cob_field *f1, cob_field *f2)
 {
 	union {
-		cob_u64_t		uval;
-		cob_s64_t		sval;
+		cob_u64_t		val;
+		cob_s64_t		val2;
 	}		ul64;
 	unsigned int	sign;
 
 	sign = 0;
 	if (COB_FIELD_HAVE_SIGN (f1)) {
-		ul64.sval = cob_binary_mget_sint64 (f1);
-		if (ul64.sval < 0) {
+		ul64.val2 = cob_binary_mget_sint64 (f1);
+		if (ul64.val2 < 0) {
 			sign = 1;
 		}
-		if (COB_FIELD_BINARY_TRUNC (f2)) {
-			ul64.sval %= cob_exp10_ll[(int)COB_FIELD_DIGITS(f2)];
-		}
 	} else {
-		ul64.uval = cob_binary_mget_uint64 (f1);
-		if (COB_FIELD_BINARY_TRUNC (f2)) {
-			ul64.uval %= cob_exp10_ll[(int)COB_FIELD_DIGITS(f2)];
-		}
+		ul64.val = cob_binary_mget_uint64 (f1);
 	}
 	if (COB_FIELD_HAVE_SIGN (f2)) {
-		cob_binary_mset_sint64 (f2, ul64.sval);
+		cob_binary_mset_sint64 (f2, ul64.val2);
 	} else {
 		if (sign) {
-			cob_binary_mset_uint64 (f2, (cob_u64_t)(-ul64.sval));
+			cob_binary_mset_uint64 (f2, (cob_u64_t)(-ul64.val2));
 		} else {
-			cob_binary_mset_uint64 (f2, ul64.uval);
+			cob_binary_mset_uint64 (f2, ul64.val);
 		}
 	}
 }
@@ -602,7 +596,8 @@ cob_move_display_to_binary (cob_field *f1, cob_field *f2)
 		}
 	}
 
-	if (COB_FIELD_BINARY_TRUNC (f2)) {
+	if (COB_FIELD_BINARY_TRUNC (f2) &&
+	    !COB_FIELD_REAL_BINARY(f2)) {
 		val %= cob_exp10_ll[(int)COB_FIELD_DIGITS(f2)];
 	}
 
@@ -700,10 +695,6 @@ cob_move_display_to_edited (cob_field *f1, cob_field *f2)
 	}
 
 	/* Count the number of digit places before decimal point */
-	/*
-	  TO-DO: This is computed in cb_build_picture; add computed results to
-	  cb_field and use those.
-	*/
 	for (p = COB_FIELD_PIC (f2); p->symbol; ++p) {
 		c = p->symbol;
 		repeat = p->times_repeated;
@@ -933,16 +924,18 @@ cob_move_display_to_edited (cob_field *f1, cob_field *f2)
 					}
 				}
 				if (sign_symbol && curr_symbol) {
-					/*
-					  Only one of $ and +/- can be floating
-					  in any given picture, so the symbol
-					  which comes after the other must be
-					  the one which floats.
-					*/
 					if (sign_first) {
 						*dst = curr_symbol;
+						--dst;
+						if (dst >= f2->data) {
+							*dst = sign_symbol;
+						}
 					} else {
 						*dst = sign_symbol;
+						--dst;
+						if (dst >= f2->data) {
+							*dst = curr_symbol;
+						}
 					}
 				} else if (sign_symbol) {
 					*dst = sign_symbol;
@@ -1171,9 +1164,8 @@ cob_move_ibm (void *dst, void *src, const int len)
 	char	*dest = dst;
 	char	*srce = src;
 	int	i;
-	for (i=0; i < len; i++) {
+	for(i=0; i < len; i++)
 		dest[i] = srce[i];
-	}
 }
 
 void
@@ -1203,16 +1195,16 @@ cob_move (cob_field *src, cob_field *dst)
 	}
 
 	/* Non-elementary move */
-	if (COB_FIELD_TYPE (src) == COB_TYPE_GROUP
-	 || COB_FIELD_TYPE (dst) == COB_TYPE_GROUP) {
+	if (COB_FIELD_TYPE (src) == COB_TYPE_GROUP ||
+	    COB_FIELD_TYPE (dst) == COB_TYPE_GROUP) {
 		cob_move_alphanum_to_alphanum (src, dst);
 		return;
 	}
 
 	opt = 0;
 	if (COB_FIELD_TYPE (dst) == COB_TYPE_NUMERIC_BINARY) {
-		if (COB_FIELD_BINARY_TRUNC (dst)
-		 && !COB_FIELD_REAL_BINARY (dst)) {
+		if (COB_FIELD_BINARY_TRUNC (dst) &&
+		    !COB_FIELD_REAL_BINARY(dst)) {
 			opt = COB_STORE_TRUNC_ON_OVERFLOW;
 		}
 	}
@@ -1244,12 +1236,12 @@ cob_move (cob_field *src, cob_field *dst)
 			cob_move_display_to_edited (src, dst);
 			return;
 		case COB_TYPE_ALPHANUMERIC_EDITED:
-			if (COB_FIELD_SCALE (src) < 0
-			 || COB_FIELD_SCALE (src) > COB_FIELD_DIGITS (src)) {
+			if (COB_FIELD_SCALE(src) < 0 ||
+			    COB_FIELD_SCALE(src) > COB_FIELD_DIGITS(src)) {
 				/* Expand P's */
 				indirect_move (cob_move_display_to_display, src, dst,
-						(size_t)cob_max_int ((int)COB_FIELD_DIGITS(src), (int)COB_FIELD_SCALE(src)),
-						cob_max_int (0, (int)COB_FIELD_SCALE(src)));
+					      (size_t)cob_max_int ((int)COB_FIELD_DIGITS(src), (int)COB_FIELD_SCALE(src)),
+					      cob_max_int (0, (int)COB_FIELD_SCALE(src)));
 				return;
 			} else {
 				cob_move_alphanum_to_edited (src, dst);
@@ -1311,13 +1303,13 @@ cob_move (cob_field *src, cob_field *dst)
 			return;
 		case COB_TYPE_NUMERIC_EDITED:
 			indirect_move (cob_move_binary_to_display, src, dst,
-					(size_t)COB_MAX_DIGITS,
-					COB_FIELD_SCALE(src));
+				       (size_t)COB_MAX_DIGITS,
+				       COB_FIELD_SCALE(src));
 			return;
 		default:
 			indirect_move (cob_move_binary_to_display, src, dst,
-					(size_t)(COB_FIELD_DIGITS(src)),
-					COB_FIELD_SCALE(src));
+				       (size_t)(COB_FIELD_DIGITS(src)),
+				       COB_FIELD_SCALE(src));
 			return;
 		}
 
@@ -1702,9 +1694,7 @@ cob_init_move (cob_global *lptr, cob_settings *sptr)
 void
 cob_put_u64_compx (cob_u64_t val, void *mem, int len)
 {
-#if !defined(WORDS_BIGENDIAN)
 	cob_u64_t	ulong;
-#endif
 	cob_u32_t	uint;
 	cob_u16_t	ushort;
 	
@@ -1796,9 +1786,7 @@ cob_put_u64_comp5 (cob_u64_t val, void *mem, int len)
 void
 cob_put_s64_compx (cob_s64_t val, void *mem, int len)
 {
-#if !defined(WORDS_BIGENDIAN)
 	cob_s64_t	slong;
-#endif
 	cob_s32_t	sint;
 	cob_s16_t	sshort;
 #if defined(WORDS_BIGENDIAN)

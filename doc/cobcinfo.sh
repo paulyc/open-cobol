@@ -1,7 +1,7 @@
 #!/bin/sh
 # cobcinfo.sh gnucobol/doc
 #
-# Copyright (C) 2010,2012, 2016-2018 Free Software Foundation, Inc.
+# Copyright (C) 2010,2012, 2016-2017 Free Software Foundation, Inc.
 # Written by Roger While, Simon Sobisch
 #
 # This file is part of GnuCOBOL.
@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+# along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 # use GREP from configure, passed when called from Makefile
 GREP_ORIG="$GREP";
@@ -26,10 +26,10 @@ if test "x$GREP" = "x"; then GREP=grep; fi
 if test "$1" != "fixtimestamps"; then
 
    # test for grep -A
-   $GREP -A2 test /dev/null 2>/dev/null 1>&2
+   $GREP -A2 test /dev/null 2>/dev/null
    if test "$?" -ne 1; then
       GREP=ggrep
-      $GREP -A2 test /dev/null 2>/dev/null 1>&2
+      $GREP -A2 test /dev/null 2>/dev/null
       if test "$?" -ne 1; then
          echo "error: grep not working, re-run with GREP=/path/to/gnu-grep"
          echo "       GREP is currently \"$GREP_ORIG\""
@@ -44,23 +44,6 @@ if test "$1" != "fixtimestamps"; then
    if test "x$COBCRUN" = "x"; then
       echo 'WARNING: $COBCRUN not set, defaulting to "cobcrun"'
       COBCRUN=cobcrun
-   fi
-   
-   # test for working executables
-   $COBC    -V 2>/dev/null 1>&2
-   ret=$?
-   if test "$ret" -ne 0; then
-     echo "error: cobc is not working, re-run with COBC=/path/to/cobc"
-	 echo "       and ensure that its dependencies can be found."
-     echo "       COBC is currently \"$COBC\""
-     exit $ret
-   fi
-   $COBCRUN -V 2>/dev/null 1>&2
-   if test "$ret" -ne 0; then
-     echo "error: cobcrun is not working, re-run with COBCRUN=/path/to/cobcrun"
-	 echo "       and ensure that its dependencies can be found."
-     echo "       COBCRUN is currently \"$COBCRUN\""
-     exit $ret
    fi
 
 fi
@@ -106,7 +89,7 @@ _create_file () {
 		"cbconf.tex")
 			echo "@verbatim"               > $1
 			cat $confdir/default.conf \
-			| $GREP -A9999 "https://www.gnu.org/licenses/" \
+			| $GREP -A9999 "http://www.gnu.org/licenses/" \
 			| tail -n +2 \
 			                               >>$1
 			echo "@end verbatim"           >>$1
@@ -144,10 +127,8 @@ created_texfiles="cbhelp.tex cbchelp.tex cbrese.tex cbintr.tex cbsyst.tex"
 created_texfiles="$created_texfiles cbmnem.tex cbconf.tex cbrunt.tex"
 
 
-# for old systems that don't support this POSIX parameter expansion:
-#case "$1" in
-# otherwise: only use filename (strip possible path)
-case "${1##*/}" in
+
+case "$1" in
 	"")
 		for file in $created_texfiles; do
 			_create_file $file

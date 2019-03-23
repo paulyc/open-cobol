@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2001-2012, 2014-2019 Free Software Foundation, Inc.
+   Copyright (C) 2001-2012, 2014-2018 Free Software Foundation, Inc.
    Written by Keisuke Nishida, Roger While, Simon Sobisch,
    Edward Hart, Ron Norman, Dave Pitts
 
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -130,15 +130,9 @@ enum cb_format {
 #define	CB_CS_OBJECT_COMPUTER		(1U << 22)
 #define	CB_CS_DELIMITER			(1U << 23)
 #define	CB_CS_SCREEN			(1U << 24)	/* within SCREEN section */
-#define	CB_CS_INQUIRE_MODIFY		(1U << 25)	/* within INQUIRE or MODIFY statement */
-#define	CB_CS_GRAPHICAL_CONTROL		(1U << 26)	/* within ACUCOBOL-GT graphical control */
+#define	CB_CS_INQUIRE_MODIFY			(1U << 25)	/* within INQUIRE or MODIFY statement */
+#define	CB_CS_GRAPHICAL_CONTROL			(1U << 26)	/* within ACUCOBOL-GT graphical control */
 #define	CB_CS_SELECT			(1U << 27)	/* within SELECT */
-#define	CB_CS_XML_GENERATE		(1U << 28)
-#define	CB_CS_XML_PARSE			(1U << 29)
-#define	CB_CS_OPEN			(1U << 30)	/* within OPEN */
-#define	CB_CS_JSON_GENERATE		(1U << 31)
-/* HACK: no more space - using minor one until re-written */
-#define	CB_CS_I_O_CONTROL		CB_CS_DAY
 
 /* Support for cobc from stdin */
 #define COB_DASH			"-"
@@ -318,7 +312,7 @@ extern struct list_files	*cb_listing_files;
 extern struct list_files	*cb_current_file;
 
 extern enum cb_format		cb_source_format;
-extern int			cb_text_column;	/* end of area B (in single-byte characters) */
+extern int			cb_text_column;
 
 extern struct cb_exception	cb_exception_table[];
 
@@ -358,7 +352,7 @@ extern struct cb_exception	cb_exception_table[];
 #undef	CB_FLAG_RQ
 #undef	CB_FLAG_NQ
 
-/* Flag to emit Old style: cob_set_location, cob_trace_section */
+/* Flag to emit Old style: cob_set_location, cob_trace_section */  
 extern int cb_old_trace;
 
 #define	CB_WARNDEF(var,name,doc)	extern int var;
@@ -388,8 +382,7 @@ extern int			cb_pic_id;
 extern int			cb_attr_id;
 extern int			cb_literal_id;
 extern int			cb_field_id;
-extern int			cb_ml_attr_id;
-extern int			cb_ml_tree_id;
+extern int			cobc_flag_main;
 extern int			cb_flag_functions_all;
 
 extern int			cb_flag_dump;
@@ -401,8 +394,7 @@ extern int			cb_flag_dump;
 #define COB_DUMP_LS	0x0020
 #define COB_DUMP_ALL	(COB_DUMP_FD|COB_DUMP_WS|COB_DUMP_RD|COB_DUMP_SD|COB_DUMP_SC|COB_DUMP_LS)
 
-extern int			cb_flag_main;	/* set if "main" requested by -x */
-extern int			cobc_flag_main;	/* set only until first program compiled, for general: use cb_flag_main*/
+extern int			cb_flag_main;
 extern int			cobc_wants_debug;
 extern int			cb_listing_xref;
 extern int			cobc_seen_stdin;
@@ -416,7 +408,6 @@ extern cob_u32_t		optimize_defs[];
 extern const char		*cb_cobc_build_stamp;
 extern const char		*cb_source_file;
 extern int			cb_source_line;
-extern const char		*cb_call_extfh;
 
 extern struct cob_time		current_compile_time;
 extern struct tm			current_compile_tm;
@@ -448,8 +439,6 @@ extern int			cb_exp_line;
 extern int			functions_are_all;
 extern struct cb_tree_common	*defined_prog_list;
 extern int			current_call_convention;
-extern struct cb_field		*external_defined_fields_ws;
-extern struct cb_field		*external_defined_fields_global;
 
 /* Functions */
 
@@ -601,7 +590,6 @@ extern void		configuration_warning (const char *, const int,
 extern void		configuration_error (const char *, const int,
 					 const int, const char *, ...) COB_A_FORMAT45;
 extern char *		cb_get_strerror (void);
-extern void		cb_add_error_to_listing (const char *, int, const char *, char *);
 DECLNORET extern void		flex_fatal_error (const char *, const char *,
 					 const int) COB_A_NORETURN;
 extern unsigned int	cb_verify (const enum cb_support, const char *);

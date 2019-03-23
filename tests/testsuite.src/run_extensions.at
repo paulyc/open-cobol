@@ -1,6 +1,5 @@
-## Copyright (C) 2003-2012, 2014-2019 Free Software Foundation, Inc.
-## Written by Keisuke Nishida, Roger While, Simon Sobisch, Edward Hart,
-## Ron Norman
+## Copyright (C) 2003-2012, 2014-2018 Free Software Foundation, Inc.
+## Written by Keisuke Nishida, Roger While, Simon Sobisch
 ##
 ## This file is part of GnuCOBOL.
 ##
@@ -15,7 +14,7 @@
 ## GNU General Public License for more details.
 ##
 ## You should have received a copy of the GNU General Public License
-## along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+## along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 ### GnuCOBOL Test Suite
 
@@ -27,10 +26,10 @@ AT_KEYWORDS([extensions literals])
 
 AT_DATA([dump.c], [
 #include <stdio.h>
+#define COB_LIB_EXPIMP
 #include <libcob.h>
-
-COB_EXT_EXPORT int
-dump (unsigned char *data, int *p)
+COB_EXPIMP int dump (unsigned char *, int *);
+int dump (unsigned char *data, int *p)
 {
   int i;
   if ( *p == 1 ) {
@@ -156,6 +155,7 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0],
 
 AT_CLEANUP
 
+
 ## Expression
 
 AT_SETUP([Semi-parenthesized condition])
@@ -278,28 +278,14 @@ AT_DATA([prog.cob], [
               DISPLAY "Length 1 " L
               END-DISPLAY
            END-IF
-           MOVE LENGTH OF X  TO L
-           IF L NOT = 2
-              DISPLAY "Length 1a " L LENGTH X
-              END-DISPLAY
-           END-IF
-           MOVE LENGTH OF Y  TO L
+           MOVE LENGTH OF Y TO L
            IF L NOT = 2
               DISPLAY "Length 2 " L
-              END-DISPLAY
-           END-IF
-           IF L NOT = 2
-              DISPLAY "Length 2a " L LENGTH OF Y
               END-DISPLAY
            END-IF
            MOVE LENGTH OF Y(1) TO L
            IF L NOT = 2
               DISPLAY "Length 3 " L
-              END-DISPLAY
-           END-IF
-           MOVE LENGTH Y(1) TO L
-           IF L NOT = 2
-              DISPLAY "Length 3a " L LENGTH OF Y(1)
               END-DISPLAY
            END-IF
            IF I-LEN NOT = 2
@@ -308,22 +294,14 @@ AT_DATA([prog.cob], [
            END-IF
            IF LENGTH OF L + 2 NOT = 8
               ADD 2 TO LENGTH OF L GIVING L
-              DISPLAY "Length 5 + 2" L
-              END-DISPLAY
-           END-IF
-           IF LENGTH L + 2 NOT = 8
-              ADD 2 TO LENGTH L GIVING L
-              DISPLAY "Length 5a + 2 " L
+              DISPLAY "Length 5 " L
               END-DISPLAY
            END-IF
            MOVE 0 TO L
            PERFORM LENGTH OF L TIMES
               ADD 1 TO L
            END-PERFORM
-           PERFORM LENGTH L TIMES
-              ADD 1 TO L
-           END-PERFORM
-           IF L NOT = 12
+           IF L NOT = 6
               DISPLAY "Length 6 " L
               END-DISPLAY
            END-IF
@@ -335,16 +313,6 @@ AT_DATA([prog.cob], [
            IF ((L NOT = 3) OR
                (I NOT = 8)    )
               DISPLAY "Length 7 " L " - " I
-              END-DISPLAY
-           END-IF
-           MOVE 0 TO L
-           PERFORM VARME
-                   VARYING I FROM LENGTH I
-                             BY   LENGTH X
-                   UNTIL   I > LENGTH L
-           IF ((L NOT = 3) OR
-               (I NOT = 8)    )
-              DISPLAY "Length 7a " L " - " I
               END-DISPLAY
            END-IF
            *> one display test
@@ -425,6 +393,7 @@ AT_CHECK([$COMPILE prog.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 
 AT_CLEANUP
+
 
 ## OCCURS
 
@@ -751,12 +720,12 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE -fcomplex-odo -fodoslide prog.cob], [0], [], [])
-AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0])
 
 AT_CLEANUP
 
 
-AT_SETUP([OCCURS UNBOUNDED (1)])
+AT_SETUP([OCCURS UNBOUNDED])
 AT_KEYWORDS([extensions runsubscripts subscripts])
 
 AT_DATA([prog.cob], [
@@ -795,161 +764,7 @@ AT_DATA([prog.cob], [
 ])
 
 AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
-
-AT_CLEANUP
-
-
-AT_SETUP([OCCURS UNBOUNDED (2)])
-AT_KEYWORDS([extensions runsubscripts DEPENDING odo subscripts])
-
-# note: the following example is from IBM's Language Reference
-#       for Enterprise COBOL for z/OS 6.1, but with fixed use
-#       of old-size (+ removing some binary zeros for output)
-
-AT_DATA([ALLOC.cob], [
-       ID DIVISION.
-        PROGRAM-ID. ALLOC.
-       ENVIRONMENT DIVISION.
-       DATA DIVISION.
-        WORKING-STORAGE SECTION.
-        77  X   PIC  9(2) PACKED-DECIMAL.
-        77  NUM-ELEMENTS PIC 9(4) BINARY.
-        77  SIZE-NEEDED  PIC 9(4) BINARY.
-        77  old-size     pic 9(4) binary.
-        77  VPTR  POINTER.
-        77  VPTR2 POINTER.
-        77  VPTR3 POINTER.
-
-        LINKAGE       SECTION.
-
-        01  VARGRP.
-          02  OBJ     PIC 9(4) COMP.
-          02  TABGRP.
-            03  VARTAB OCCURS 1 TO UNBOUNDED DEPENDING ON OBJ.
-              04  T1      PIC 9(4).
-              04  T2      PIC X(8).
-              04  T3      PIC 9(4). *> changed from COMP because of output
-        01 BUFFER         PIC X(1000).
-
-       PROCEDURE DIVISION.
-
-      *>    DISPLAY 'Starting testcase ALLOC'
-
-           SET VPTR VPTR2 VPTR3 To NULL
-
-      *************************************************************
-      *  Allocate a table with 20 elements
-      *************************************************************
-           COMPUTE NUM-ELEMENTS = 20
-           PERFORM ALLOC-VARGRP
-
-      *************************************************************
-      *  Set some 'test' values to validate re-allocated table
-      *************************************************************
-           initialize vartab(12), vartab(17)
-           COMPUTE T1(12) = 9999
-           MOVE 'HI MOM' TO T2 (17)
-      *>   DISPLAY '  '
-           DISPLAY 'VARTAB(12) = "' VARTAB(12) '"'
-           DISPLAY 'VARTAB(17) = "' VARTAB(17) '"'
-      *>   DISPLAY '  '
-
-      *************************************************************
-      *  Need a bigger table! Allocate a larger one and copy data
-      *************************************************************
-           COMPUTE NUM-ELEMENTS = 30
-           PERFORM ALLOC-VARGRP
-
-      *************************************************************
-      *  Ensure that new table has correct data from original
-      *************************************************************
-           DISPLAY 'VARTAB(12) = "' VARTAB(12) '"'
-           DISPLAY 'VARTAB(17) = "' VARTAB(17) '"'
-
-           GOBACK.
-
-      *************************************************************
-      *  The first time allocate the original table.  If the table
-      *  has already been allocated, assume that we are allocating
-      *  a larger one and want to copy the data over to it
-      *************************************************************
-        ALLOC-VARGRP.
-
-           If VPTR = NULL Then      *> If first time, allocate the table
-             COMPUTE SIZE-NEEDED = LENGTH OF OBJ +
-                                 LENGTH OF VARTAB * NUM-ELEMENTS
-             display 'First allocation, using ' size-needed ' bytes.'
-             ALLOCATE SIZE-NEEDED CHARACTERS INITIALIZED RETURNING VPTR
-
-             SET ADDRESS OF VARGRP TO VPTR
-             MOVE NUM-ELEMENTS TO OBJ
-
-           Else                     *> If already have a table, doing re-size
-      *********************************************************************
-      * Re-size it!
-      * First, allocate space for data save area  and move data in
-      *********************************************************************
-
-             ALLOCATE SIZE-NEEDED CHARACTERS INITIALIZED RETURNING VPTR2
-             SET ADDRESS OF BUFFER TO VPTR2
-             MOVE VARGRP TO BUFFER(1:SIZE-NEEDED)
-             inspect BUFFER(1:SIZE-NEEDED) replacing all x'00' by space
-             DISPLAY 'BUFFER     = "'
-                   BUFFER(170:66) '"'
-             DISPLAY 'BUFFER     = "'
-                   BUFFER(226:66) '"'
-             move size-needed to old-size
-
-      *********************************************************************
-      * Calculate new size from NUM-ElEMENTS
-      *********************************************************************
-             COMPUTE SIZE-NEEDED = LENGTH OF OBJ +
-                                   LENGTH OF VARTAB * NUM-ELEMENTS
-
-             display 'Re-allocation, using ' size-needed ' bytes.'
-      *>     ALLOCATE SIZE-NEEDED CHARACTERS INITIALIZED RETURNING VPTR3
-             if size-needed < 2097152
-                ALLOCATE SIZE-NEEDED CHARACTERS INITIALIZED
-                                                loc 24
-                                                RETURNING VPTR3
-             else
-                ALLOCATE SIZE-NEEDED CHARACTERS INITIALIZED
-                                                loc 31
-                                                RETURNING VPTR3
-             end-if
-
-      *************************************************************
-      * Move data from data save area to new larger table
-      *************************************************************
-             SET ADDRESS OF VARGRP TO VPTR3
-             MOVE NUM-ELEMENTS TO OBJ
-             MOVE BUFFER(1:old-size) TO VARGRP
-             call 'CBL_OC_DUMP' using VARGRP   *> remove me once all is fine
-             (1:size-needed) *> FIXME (from rw-branch), shouldn't be needed
-      *************************************************************
-      * Free the original table and temp copy
-      *************************************************************
-             FREE VPTR  VPTR2
-             SET VPTR TO VPTR2
-             .
-])
-
-AT_CHECK([$COMPILE -std=ibm-strict -w ALLOC.cob], [0], [], [])
-
-# compiler limits ODO-item wrong, merge of rw-branch needed
-AT_XFAIL_IF(true)
-
-AT_CHECK([$COBCRUN_DIRECT ./ALLOC], [0],
-[First allocation, using 00322 bytes.
-VARTAB(12) = "9999        0000"
-VARTAB(17) = "0000HI MOM  0000"
-BUFFER     = "        9999        0000                                "
-             "                                0000HI MOM  0000        "
-Re-allocation, using 00482 bytes.
-VARTAB(12) = "9999        0000"
-VARTAB(17) = "0000HI MOM  0000"
-], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0])
 
 AT_CLEANUP
 
@@ -1162,6 +977,7 @@ AT_DATA([reference], [010205Howdy 1 2<>  01***Abcde. 344502***Abcde. 4556<>
 AT_CHECK([diff reference SEQODO], [0], [], [])
 
 AT_CLEANUP
+
 
 AT_SETUP([DEPENDING ON with ODOSLIDE for IBM])
 AT_KEYWORDS([OCCURS])
@@ -1406,6 +1222,7 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [12891289128912891289128912891289])
 
 AT_CLEANUP
 
+
 ## CALL
 
 AT_SETUP([CALL USING file-name])
@@ -1414,10 +1231,9 @@ AT_KEYWORDS([extensions])
 AT_DATA([setfilename.c], [
 #include <stdio.h>
 #include <string.h>
+#define COB_LIB_EXPIMP
 #include <libcob.h>
-
-COB_EXT_EXPORT int
-setfilename (cob_file *f, unsigned char *name)
+COB_EXPIMP int setfilename (cob_file *f, unsigned char *name)
 {
   memcpy (f->assign->data, name, strlen ((char *)name));
   return 0;
@@ -1452,6 +1268,7 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 AT_CHECK([test -e TESTFILE], [0], [], [])
 
 AT_CLEANUP
+
 
 AT_SETUP([CALL unusual PROGRAM-ID.])
 AT_KEYWORDS([extensions])
@@ -1516,6 +1333,7 @@ AT_CHECK([$COMPILE -o caller caller.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./caller], [0], [P1P2P3P4])
 
 AT_CLEANUP
+
 
 AT_SETUP([CALL / GOBACK with LOCAL-STORAGE])
 AT_KEYWORDS([extensions])
@@ -1778,10 +1596,11 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 
 AT_CLEANUP
 
+
 ## ASSIGN
 
 AT_SETUP([ASSIGN clause])
-AT_KEYWORDS([extensions runfile])
+AT_KEYWORDS([extensions])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -1808,8 +1627,9 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 
 AT_CLEANUP
 
+
 AT_SETUP([ASSIGN clause IBM])
-AT_KEYWORDS([extensions runfile])
+AT_KEYWORDS([extensions])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -1837,34 +1657,8 @@ AT_CHECK([test -f FILENAME], [0], [], [])
 AT_CLEANUP
 
 
-AT_SETUP([ASSIGN expansion])
-AT_KEYWORDS([extensions runfile])
-
-AT_DATA([prog.cob], [
-       IDENTIFICATION   DIVISION.
-       PROGRAM-ID.      prog.
-       ENVIRONMENT      DIVISION.
-       INPUT-OUTPUT     SECTION.
-       FILE-CONTROL.
-       SELECT TEST-FILE ASSIGN "$DIR/FILENAME".
-       DATA             DIVISION.
-       FILE             SECTION.
-       FD TEST-FILE.
-       01 TEST-REC      PIC X(4).
-       PROCEDURE        DIVISION.
-           OPEN OUTPUT TEST-FILE.
-           CLOSE TEST-FILE.
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE -ffilename-mapping prog.cob], [0], [], [])
-AT_CHECK([DIR="." $COBCRUN_DIRECT ./prog], [0], [], [])
-AT_CHECK([test -f "./FILENAME" && rm -f "./FILENAME"], [0], [], [])
-
-AT_CLEANUP
-
 AT_SETUP([ASSIGN mapping])
-AT_KEYWORDS([extensions runfile optional])
+AT_KEYWORDS([extensions])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -1916,126 +1710,38 @@ AT_CHECK([test -f "z"], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./prog2], [0], [], [])
 AT_CHECK([test -f "FILENAME2"], [0], [], [])
 
-AT_DATA([prog3.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog3.
-       ENVIRONMENT DIVISION.
-       CONFIGURATION SECTION.
-       INPUT-OUTPUT SECTION.
+AT_CLEANUP
+
+
+AT_SETUP([ASSIGN expansion])
+AT_KEYWORDS([extensions])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
        FILE-CONTROL.
-           SELECT OPTIONAL INFILE ASSIGN TO "MYFILE"
-                ORGANIZATION IS RELATIVE
-                ACCESS IS SEQUENTIAL
-                FILE STATUS IS WSFS.
-       DATA DIVISION.
-       FILE SECTION.
-       FD  INFILE.
-       01  INREC             PIC X(80).
-       WORKING-STORAGE SECTION.
-       01  WSFS              PIC X(2).
-       PROCEDURE DIVISION.
-      *
-      *    open missing file
-           OPEN INPUT INFILE
-           DISPLAY "STATUS OPENI " WSFS
-           CLOSE INFILE
-      *
-      *    create missing file
-           OPEN OUTPUT INFILE
-           DISPLAY "STATUS OPENO " WSFS
-           CLOSE INFILE
-      *
+       SELECT TEST-FILE ASSIGN "$DIR/FILENAME".
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD TEST-FILE.
+       01 TEST-REC      PIC X(4).
+       PROCEDURE        DIVISION.
+           OPEN OUTPUT TEST-FILE.
+           CLOSE TEST-FILE.
            STOP RUN.
 ])
 
-AT_CHECK([$COMPILE prog3.cob], [0], [], [])
-
-AT_CHECK([$COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 05
-STATUS OPENO 00
-], [])
-AT_CHECK([test -f "MYFILE"], [0], [], [])
-
-AT_CHECK([$COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 00
-STATUS OPENO 00
-], [])
-
-AT_CHECK([MYFILE="TSTFILE" $COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 05
-STATUS OPENO 00
-], [])
-AT_CHECK([test -f "TSTFILE"], [0], [], [])
-
-AT_CHECK([dd_MYFILE="TSTFILE2" $COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 05
-STATUS OPENO 00
-], [])
-AT_CHECK([test -f "TSTFILE2"], [0], [], [])
-
-AT_CHECK([DD_MYFILE="TSTFILE3" $COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 05
-STATUS OPENO 00
-], [])
-AT_CHECK([test -f "TSTFILE3"], [0], [], [])
-
-AT_CHECK([DD_MYFILE="./nosubhere/TSTFILE" $COBCRUN_DIRECT ./prog3], [0],
-[STATUS OPENI 05
-STATUS OPENO 30
-], [])
-
-AT_DATA([prog4.cob], [
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. prog4.
-       ENVIRONMENT DIVISION.
-       CONFIGURATION SECTION.
-       INPUT-OUTPUT SECTION.
-       FILE-CONTROL.
-           SELECT  FILE0 ASSIGN  TO "./nosubhere/MYFILE0"
-                   ORGANIZATION  IS LINE SEQUENTIAL
-                   FILE STATUS   IS WSFS.
-           SELECT  FILE1 ASSIGN  TO "MYFILE1"
-                   ORGANIZATION  IS LINE SEQUENTIAL
-                   FILE STATUS   IS WSFS.
-           SELECT  FILE2 ASSIGN  TO FILENAME
-                   ORGANIZATION  IS LINE SEQUENTIAL
-                   FILE STATUS   IS WSFS.
-       DATA DIVISION.
-       FILE SECTION.
-       FD  FILE0.
-       01  F0REC             PIC X(80).
-       FD  FILE1.
-       01  F1REC             PIC X(80).
-       FD  FILE2.
-       01  F2REC             PIC X(80).
-       WORKING-STORAGE SECTION.
-       77  FILENAME          PIC X(80) VALUE "MYFILE2".
-       01  WSFS              PIC X(2).
-       PROCEDURE DIVISION.
-      *
-           OPEN OUTPUT FILE0
-           DISPLAY "STATUS OPENO 0 " WSFS
-           OPEN OUTPUT FILE1
-           DISPLAY "STATUS OPENO 1 " WSFS
-           OPEN OUTPUT FILE2
-           DISPLAY "STATUS OPENO 2 " WSFS
-      *
-           STOP RUN.
-])
-
-AT_CHECK([$COMPILE prog4.cob], [0], [], [])
-
-AT_CHECK([DD_MYFILE1="./nosubhere/NOFILE1" DD_MYFILE2="./nosubhere/NOFILE2" \
-$COBCRUN_DIRECT ./prog4], [0],
-[STATUS OPENO 0 30
-STATUS OPENO 1 30
-STATUS OPENO 2 30
-], [])
+AT_CHECK([$COMPILE -ffilename-mapping prog.cob], [0], [], [])
+AT_CHECK([DIR="." $COBCRUN_DIRECT ./prog], [0], [], [])
+AT_CHECK([test -f "./FILENAME" && rm -f "./FILENAME"], [0], [], [])
 
 AT_CLEANUP
 
+
 AT_SETUP([ASSIGN with COB_FILE_PATH])
-AT_KEYWORDS([extensions runfile])
+AT_KEYWORDS([extensions])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -2057,13 +1763,6 @@ AT_DATA([prog.cob], [
 AT_CHECK([$COMPILE -ffilename-mapping prog.cob], [0], [], [])
 AT_CHECK([COB_FILE_PATH=".." $COBCRUN_DIRECT ./prog], [0], [], [])
 AT_CHECK([test -f "../FILENAMEX" && rm -f "../FILENAMEX"], [0], [], [])
-AT_CHECK([COB_FILE_PATH="../" $COBCRUN_DIRECT ./prog], [0], [], [])
-AT_CHECK([test -f "../FILENAMEX" && rm -f "../FILENAMEX"], [0], [], [])
-
-# FIXME: on OPEN we should also output the full filename (if any) leading to the error
-AT_CHECK([COB_FILE_PATH="./nosubhere" $COBCRUN_DIRECT ./prog], [1], [],
-[libcob: prog.cob:13: permanent file error (status = 30) file: 'FILENAMEX'
-])
 
 AT_CLEANUP
 
@@ -2789,8 +2488,9 @@ AT_DATA([prog.cob], [
            STOP RUN.
 ])
 
+export TEST_ENV=OK
 AT_CHECK([$COMPILE prog.cob], [0], [], [])
-AT_CHECK([TEST_ENV=OK $COBCRUN_DIRECT ./prog CHECKPAR], [0],
+AT_CHECK([$COBCRUN_DIRECT ./prog CHECKPAR], [0],
 [(OK  )
 (RXW )
 (CHECKPAR)
@@ -3089,7 +2789,7 @@ AT_DATA([prog.cob], [
 AT_CHECK([$COMPILE -std=cobol2002 prog.cob], [1], [],
 [prog.cob:6: error: syntax error, unexpected TERMINAL
 prog.cob:7: error: syntax error, unexpected SEND
-prog.cob:9: error: syntax error, unexpected TERMINAL, expecting [(]
+prog.cob:9: error: syntax error, unexpected TERMINAL
 ])
 AT_CHECK([$COMPILE -std=cobol2014 prog.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./prog], [0],
@@ -4238,9 +3938,11 @@ AT_DATA([test_errno.c], [
 #include <errno.h>
 #include <stdio.h>
 
+#define COB_LIB_EXPIMP
 #include <libcob.h>
+COB_EXPIMP int test_errno(void);
 
-COB_EXT_EXPORT int
+int
 test_errno(void)
 {
     FILE *fail;
@@ -4257,8 +3959,11 @@ test_errno(void)
 AT_DATA([test_stdio.c], [
 #include <stdio.h>
 
+#define COB_LIB_EXPIMP
 #include <libcob.h>
-COB_EXT_EXPORT int
+COB_EXPIMP int test_stdio(FILE *, FILE *, FILE *);
+
+int
 test_stdio(FILE *si, FILE *so, FILE *se)
 {
     if (feof(si)) {

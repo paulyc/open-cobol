@@ -375,10 +375,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\libcob\mlio.c"
-				>
-			</File>
-			<File
 				RelativePath="..\..\libcob\move.c"
 				>
 			</File>

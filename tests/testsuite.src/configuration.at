@@ -1,4 +1,4 @@
-## Copyright (C) 2014-2019 Free Software Foundation, Inc.
+## Copyright (C) 2014-2018 Free Software Foundation, Inc.
 ## Written by Simon Sobisch
 ##
 ## This file is part of GnuCOBOL.
@@ -14,7 +14,7 @@
 ## GNU General Public License for more details.
 ##
 ## You should have received a copy of the GNU General Public License
-## along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+## along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 
 ### GnuCOBOL Test Suite
 
@@ -477,7 +477,6 @@ test.conf: missing definitions:
 	no definition of 'hexadecimal-boolean'
 	no definition of 'national-literals'
 	no definition of 'hexadecimal-national-literals'
-	no definition of 'national-character-literals'
 	no definition of 'acu-literals'
 	no definition of 'word-continuation'
 	no definition of 'not-exception-before-exception'
@@ -498,9 +497,6 @@ test.conf: missing definitions:
 	no definition of 'record-delim-with-fixed-recs'
 	no definition of 'missing-statement'
 	no definition of 'zero-length-literals'
-	no definition of 'xml-generate'
-	no definition of 'xml-generate-extra-phrases'
-	no definition of 'json-generate'
 ])
 
 AT_CLEANUP
@@ -518,7 +514,7 @@ AT_CHECK([$COBCRUN --runtime-conf], [0], ignore, [])
 # into two lines
 AT_CHECK([$COBCRUN --runtime-conf | tr -d '\n ' | \
 grep "runtime_empty.cfg"], [0], ignore, [])
-AT_CHECK([COB_RUNTIME_CONFIG="" $COBCRUN --runtime-conf | tr -d '\n ' \
+AT_CHECK([export COB_RUNTIME_CONFIG=""; $COBCRUN --runtime-conf | tr -d '\n ' \
 | grep "runtime.cfg"],
 [0], ignore, [])
 
@@ -541,25 +537,25 @@ setenv COB_PHYSICAL_CANCEL=true
 ])
 
 
-# verify that default for physical cancel is still "no"
+# verify that default for physical cancel is still false
 AT_CHECK([$COBCRUN --runtime-conf | \
-grep "COB_PHYSICAL_CANCEL" | grep "no" | grep "default"], [0], ignore, [])
+grep "COB_PHYSICAL_CANCEL" | grep "false" | grep "default"], [0], ignore, [])
 
 # verify that override via -c works and if include works
 AT_CHECK([$COBCRUN -c test2.cfg --runtime-conf | \
-grep "physical_cancel" | grep "yes"], [0], ignore, [])
+grep "physical_cancel" | grep "true"], [0], ignore, [])
 AT_CHECK([$COBCRUN -c test.cfg --runtime-conf | \
-grep "physical_cancel" | grep "yes"], [0], ignore, [])
+grep "physical_cancel" | grep "true"], [0], ignore, [])
 AT_CHECK([$COBCRUN -c test3.cfg --runtime-conf | \
-grep "COB_PHYSICAL_CANCEL" | grep "yes"], [0], ignore, [])
+grep "COB_PHYSICAL_CANCEL" | grep "true"], [0], ignore, [])
 
 # verify that that long option works
 AT_CHECK([$COBCRUN --config=test3.cfg --runtime-conf | \
-grep "COB_PHYSICAL_CANCEL" | grep "yes"], [0], ignore, [])
+grep "COB_PHYSICAL_CANCEL" | grep "true"], [0], ignore, [])
 
 # verify that that environment setting works
 AT_CHECK([COB_RUNTIME_CONFIG=test3.cfg $COBCRUN --runtime-conf | \
-grep "COB_PHYSICAL_CANCEL" | grep "yes"], [0], ignore, [])
+grep "COB_PHYSICAL_CANCEL" | grep "true"], [0], ignore, [])
 
 # verify that configuration file loading with full path works
 AT_CHECK([$COBCRUN -c "$(_return_path "$(pwd)/test.cfg")" --runtime-conf],
@@ -604,8 +600,8 @@ AT_DATA([test.cfg], [
 physical_cancel true
 ])
 
-AT_CHECK([COB_PHYSICAL_CANCEL=false $COBCRUN -c test.cfg --runtime-conf | \
-grep "COB_PHYSICAL_CANCEL" | grep "no"], [0], ignore, [])
+AT_CHECK([export COB_PHYSICAL_CANCEL=false; $COBCRUN -c test.cfg --runtime-conf | \
+grep "COB_PHYSICAL_CANCEL" | grep "false"], [0], ignore, [])
 
 AT_CLEANUP
 
@@ -622,7 +618,7 @@ AT_DATA([defunc.cfg], [
 novar
 physical_cancel notwithme
 load_case  insensitive
-varseq_format big
+varseq_format big 
 sort_chunk 4K
 sort_memory 4G # too big by some byte
 setenv nothing
@@ -658,7 +654,7 @@ AT_DATA([defunc.cfg], [
 novar
 physical_cancel notwithme
 load_case  insensitive
-varseq_format big
+varseq_format big 
 sort_chunk 4K
 sort_memory 4G # too big by some byte
 setenv nothing
@@ -733,20 +729,8 @@ AT_CHECK([$COBCRUN -c defunc.cfg --runtime-conf], [0], ignore, [])
 AT_CLEANUP
 
 
-AT_SETUP([runtime configuration: strings and environment])
-AT_KEYWORDS([configuration environment variable])
-
-AT_CHECK([unset greet name && \
-TESTME="this is a test" COB_EXIT_MSG='${greet:Bye} ${name:-user}, ${TESTME}' $COBCRUN --runtime-conf | \
-grep "COB_EXIT_MSG" | grep "Bye user, this is a test"], [0], ignore, [])
-AT_CHECK([$COBCRUN --runtime-conf | \
-grep "COB_EXIT_MSG" | grep "end of program, please press a key to exit"], [0], ignore, [])
-
-AT_CLEANUP
-
-
-AT_SETUP([validation of COB_CONFIG_DIR])
-AT_KEYWORDS([runtime configuration environment variable])
+AT_SETUP([COB_CONFIG_DIR test])
+AT_KEYWORDS([environment variable])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -760,7 +744,7 @@ AT_CHECK([echo "$PATHSEP"], [0], [;
 
 # Previous test "failed" --> PATHSEP isn't ;
 
-AT_CHECK([COB_CONFIG_DIR="/temp:/tmp" \
+AT_CHECK([export COB_CONFIG_DIR="/temp:/tmp"; \
 $COMPILE prog.cob], [1], [],
 [cobc: environment variable 'COB_CONFIG_DIR' is '/temp:/tmp'; should not contain ':'
 configuration error:
@@ -772,7 +756,7 @@ cobc: error: please check environment variables as noted above
 
 # Previous test "passed" --> PATHSEP is ;
 
-AT_CHECK([COB_CONFIG_DIR="C:\temp;C:\tmp" \
+AT_CHECK([export COB_CONFIG_DIR="C:\temp;C:\tmp"; \
 $COMPILE prog.cob], [1], [],
 [cobc: environment variable 'COB_CONFIG_DIR' is 'C:\temp;C:\tmp'; should not contain ';'
 configuration error:

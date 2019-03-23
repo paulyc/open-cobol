@@ -15,7 +15,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+   along with GnuCOBOL.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -584,7 +584,6 @@ ppparse_clear_vars (const struct cb_define_struct *p)
 %token SET_DIRECTIVE
 %token ADDRSV
 %token ADDSYN
-%token CALLFH
 %token COMP1
 %token CONSTANT
 %token FOLDCOPYNAME
@@ -624,12 +623,10 @@ ppparse_clear_vars (const struct cb_define_struct *p)
 %token TERMINATOR	"end of line"
 
 %token <s> TOKEN		"Identifier or Literal"
-%token <s> TEXT_NAME	"Text-Name"
 %token <s> VARIABLE_NAME	"Variable"
 %token <s> LITERAL		"Literal"
 
 %type <s>	copy_in
-%type <s>	copy_source
 
 %type <l>	token_list
 %type <l>	identifier
@@ -742,20 +739,6 @@ set_choice:
 	      fprintf (ppout, "#ADDSYN %s %s\n", l->text, l->next->text);
       }
   }
-| CALLFH LITERAL
-  {
-	char	*p = $2;
-	/* Remove surrounding quotes/brackets */
-	size_t	size;
-	++p;
-	size = strlen (p) - 1;
-	p[size] = '\0';
-	fprintf (ppout, "#CALLFH \"%s\"\n", p);
-  }
-| CALLFH
-  {
-	fprintf (ppout, "#CALLFH \"EXTFH\"\n");
-  }
 | COMP1 LITERAL
   {
 	char	*p = $2;
@@ -833,8 +816,8 @@ set_choice:
 		cb_source_format = CB_FORMAT_FREE;
 	} else if (!strcasecmp (p, "VARIABLE")) {
 		cb_source_format = CB_FORMAT_FIXED;
-		/* This value matches most MF Visual COBOL 4.0 version. */
-		cb_text_column = 250;
+		/* This is an arbitrary value; perhaps change later? */
+		cb_text_column = 500;
 	} else {
 		ppp_error_invalid_option ("SOURCEFORMAT", p);
 	}
@@ -1200,31 +1183,24 @@ condition_clause:
 ;
 
 copy_statement:
-  COPY copy_source copy_in copy_suppress copy_replacing
+  COPY TOKEN copy_in copy_suppress copy_replacing
   {
 	fputc ('\n', ppout);
-	ppcopy ($2, $3, $5);
-  }
-;
-
-copy_source:
-  TOKEN
-  {
-	$$ = fix_filename ($1);
+	$2 = fix_filename ($2);
 	if (cb_fold_copy == COB_FOLD_LOWER) {
-		$$ = fold_lower ($$);
+		$2 = fold_lower ($2);
 	} else if (cb_fold_copy == COB_FOLD_UPPER) {
-		$$ = fold_upper ($$);
+		$2 = fold_upper ($2);
 	}
-  }
-| TEXT_NAME
-  {
-	$$ = $1;
-	if (cb_fold_copy == COB_FOLD_LOWER) {
-		$$ = fold_lower ($$);
-	} else {
-		$$ = fold_upper ($$);
+	if ($3) {
+		$3 = fix_filename ($3);
+		if (cb_fold_copy == COB_FOLD_LOWER) {
+			$3 = fold_lower ($3);
+		} else if (cb_fold_copy == COB_FOLD_UPPER) {
+			$3 = fold_upper ($3);
+		}
 	}
+	ppcopy ($2, $3, $5);
   }
 ;
 
@@ -1233,7 +1209,7 @@ copy_in:
   {
 	$$ = NULL;
   }
-| in_or_of copy_source
+| in_or_of TOKEN
   {
 	$$ = $2;
   }
